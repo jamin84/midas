@@ -45,10 +45,11 @@ storage.prototype.pushTicks = function(csArray, callback) {
 
 };
 
-storage.prototype.push = function(csArray, callback) {
+storage.prototype.pushBulk = function(candleStickSizeMinutes, csArray, callback) {
+  this.logger.log('* Pushing to '+this.exchangeCandleBase+candleStickSizeMinutes.toString());
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+'60');
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
 
   var bulk = csCollection.initializeOrderedBulkOp();
 
@@ -57,6 +58,30 @@ storage.prototype.push = function(csArray, callback) {
   });
 
   bulk.execute(function(err, res) {
+
+    csDatastore.close();
+
+    if(err) {
+
+      callback(err);
+
+    } else {
+
+      callback(null);
+
+    }
+
+  });
+
+};
+
+storage.prototype.push = function(candleStickSizeMinutes, csObject, callback) {
+  this.logger.log('* Pushing to '+this.exchangeCandleBase+candleStickSizeMinutes.toString());
+
+  var csDatastore = mongo(this.mongoConnectionString);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+
+  csCollection.insert(csObject, function(err, doc) {
 
     csDatastore.close();
 
@@ -122,10 +147,12 @@ storage.prototype.getLastNTicks = function(N, callback) {
 
 };
 
-storage.prototype.getLastNCandles = function(candleStickSizeSeconds, N, callback) {
+storage.prototype.getLastNCandles = function(candleStickSizeMinutes, N, callback) {
+
+  this.logger.log('* getLastNCandles, size: '+candleStickSizeMinutes+' | N: '+N);
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
 
   csCollection.find({}).sort({period:-1}).limit(N, function(err, candlesSticks) {
 
@@ -146,10 +173,10 @@ storage.prototype.getLastNCandles = function(candleStickSizeSeconds, N, callback
 
 };
 
-storage.prototype.getAllCandles = function(candleStickSizeSeconds, callback) {
+storage.prototype.getAllCandles = function(candleStickSizeMinutes, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
 
   csCollection.find({}).sort({period:1}, function(err, candlesSticks) {
 
@@ -170,10 +197,10 @@ storage.prototype.getAllCandles = function(candleStickSizeSeconds, callback) {
 
 };
 
-storage.prototype.getAllCandlesSince = function(candleStickSizeSeconds, period, callback) {
+storage.prototype.getAllCandlesSince = function(candleStickSizeMinutes, period, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes);
 
   csCollection.find({period: { $gte: period }}).sort({period:1}, function(err, candlesSticks) {
 
@@ -194,10 +221,10 @@ storage.prototype.getAllCandlesSince = function(candleStickSizeSeconds, period, 
 
 };
 
-storage.prototype.getLastClose = function(candleStickSizeSeconds, callback) {
+storage.prototype.getLastClose = function(candleStickSizeMinutes, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
 
   csCollection.find({}).sort({period:-1}).limit(1, function(err, candleSticks) {
 
@@ -221,10 +248,10 @@ storage.prototype.getLastClose = function(candleStickSizeSeconds, callback) {
 
 };
 
-storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeSeconds, callback) {
+storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeMinutes, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
 
   csCollection.find({volume: { $gt: 0 }}).sort({period:-1}).limit(1, function(err, candleSticks) {
 
@@ -248,10 +275,10 @@ storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeSeconds, callb
 
 };
 
-storage.prototype.getLastNonEmptyClose = function(candleStickSizeSeconds, callback) {
+storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
 
   csCollection.find({volume: { $gt: 0 }}).sort({period:-1}).limit(1, function(err, candleSticks) {
 
@@ -275,47 +302,73 @@ storage.prototype.getLastNonEmptyClose = function(candleStickSizeSeconds, callba
 
 };
 
-storage.prototype.getLastNCompleteAggregatedCandleSticks = function(N, candleStickSize, callback) {
+storage.prototype.getLastNCompleteAggregatedCandleSticks = function(N, candleStickSizeMinutes, callback) {
+  this.logger.log('* getLastNCompleteAggregatedCandleSticks callback, size: '+candleStickSizeMinutes);
 
-  this.getLastNAggregatedCandleSticks(N + 1, candleStickSize, function(err, aggregatedCandleSticks) {
+  this.getLastNAggregatedCandleSticks(N + 1, candleStickSizeMinutes, function(err, candleStickSizeMinutes, aggregatedCandleSticks) {
+    this.logger.log('*** getLastNAggregatedCandleSticks callback, size: '+candleStickSizeMinutes);
+    aggregatedCandleSticks.pop();
+    callback(null, candleStickSizeMinutes, aggregatedCandleSticks);
+  }.bind(this));
+
+};
+
+storage.prototype.getCompleteAggregatedCandleSticks = function(candleStickSizeMinutes, callback) {
+
+  this.getAggregatedCandleSticks(candleStickSizeMinutes, function(err, aggregatedCandleSticks) {
     aggregatedCandleSticks.pop();
     callback(null, aggregatedCandleSticks);
   });
 
 };
 
-storage.prototype.getLastCompleteAggregatedCandleStick = function(candleStickSize, callback) {
+storage.prototype.getLastCompleteAggregatedCandleStick = function(candleStickSizeMinutes, callback) {
 
-  this.getLastNAggregatedCandleSticks(2, candleStickSize, function(err, aggregatedCandleSticks) {
+  this.getLastNAggregatedCandleSticks(2, candleStickSizeMinutes, function(err, candleStickSizeMinutes, aggregatedCandleSticks) {
+    this.logger.log('**** Callback: getLastNAggregatedCandleSticks, size: '+candleStickSizeMinutes);
+    this.logger.log('**** Callback: aggregatedCandleSticks: '+JSON.stringify(aggregatedCandleSticks));
     aggregatedCandleSticks.pop();
-    callback(null, _.last(aggregatedCandleSticks));
-  });
+    callback(null, candleStickSizeMinutes, _.last(aggregatedCandleSticks));
+  }.bind(this));
 
 };
 
-storage.prototype.getCompleteAggregatedCandleSticks = function(candleStickSize, callback) {
+storage.prototype.getLastNAggregatedCandleSticks = function(N, candleStickSizeMinutes, callback) {
+    this.logger.log('** getLastNAggregatedCandleSticks, size: '+candleStickSizeMinutes);
 
-  this.getAggregatedCandleSticks(candleStickSize, function(err, aggregatedCandleSticks) {
-    aggregatedCandleSticks.pop();
-    callback(null, aggregatedCandleSticks);
-  });
-
-};
-
-storage.prototype.getLastNAggregatedCandleSticks = function(N, candleStickSize, callback) {
-
-  var candleStickSizeSeconds = candleStickSize * 60;
+  var candleStickSizeSeconds = candleStickSizeMinutes * 60;
 
   var now = tools.unixTimeStamp(new Date().getTime());
   var closestCandleStick = (Math.floor(now/candleStickSizeSeconds)*candleStickSizeSeconds);
 
   var startRange = closestCandleStick - (candleStickSizeSeconds * N);
 
-  this.getAllCandlesSince('60', startRange, function(err, candleSticks) {
+  this.getAllCandlesSince('1', startRange, function(err, candleSticks) {
+    this.logger.log('***** CALLBACK: getAllCandlesSince, candleSticks length: '+candleSticks.length)
 
     if(candleSticks.length > 0) {
 
-      var aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSize, candleSticks);
+      var aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSizeMinutes, candleSticks);
+
+      callback(null, candleStickSizeMinutes, aggregatedCandleSticks);
+
+    } else {
+
+      callback(null, candleStickSizeMinutes, []);
+
+    }
+
+  }.bind(this));
+
+};
+
+storage.prototype.getAggregatedCandleSticks = function(candleStickSizeMinutes, callback) {
+
+  this.getAllCandlesSince('1', 0, function(err, candleSticks) {
+
+    if(candleSticks.length > 0) {
+
+      var aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSizeMinutes, candleSticks);
 
       callback(null, aggregatedCandleSticks);
 
@@ -329,33 +382,13 @@ storage.prototype.getLastNAggregatedCandleSticks = function(N, candleStickSize, 
 
 };
 
-storage.prototype.getAggregatedCandleSticks = function(candleStickSize, callback) {
+storage.prototype.getAggregatedCandleSticksSince = function(candleStickSizeMinutes, period, callback) {
 
-  this.getAllCandlesSince('60', 0, function(err, candleSticks) {
-
-    if(candleSticks.length > 0) {
-
-      var aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSize, candleSticks);
-
-      callback(null, aggregatedCandleSticks);
-
-    } else {
-
-      callback(null, []);
-
-    }
-
-  }.bind(this));
-
-};
-
-storage.prototype.getAggregatedCandleSticksSince = function(candleStickSize, period, callback) {
-
-  this.getAllCandlesSince('60', period, function(err, candleSticks) {
+  this.getAllCandlesSince('1', period, function(err, candleSticks) {
 
     if(candleSticks.length > 0) {
 
-      var aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSize, candleSticks);
+      var aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSizeMinutes, candleSticks);
 
       callback(null, aggregatedCandleSticks);
 
@@ -438,9 +471,9 @@ storage.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks
 
 };
 
-storage.prototype.removeOldDBCandles = function(candleStickSize, callback) {
+storage.prototype.removeOldDBCandles = function(candleStickSizeMinutes, callback) {
 
-  var candleStickSizeSeconds = candleStickSize * 60;
+  var candleStickSizeSeconds = candleStickSizeMinutes * 60;
 
   var csDatastore = mongo(this.mongoConnectionString);
   var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());

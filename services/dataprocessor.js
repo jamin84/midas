@@ -64,9 +64,9 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
 
   if(ticks.length > 0) {
 
-    this.storage.getLastNonEmptyPeriod('60', function(err, lastStoragePeriod) {
+    this.storage.getLastNonEmptyPeriod('1', function(err, lastStoragePeriod) {
 
-      this.storage.getLastNonEmptyClose('60', function(err, lastNonEmptyClose) {
+      this.storage.getLastNonEmptyClose('1', function(err, lastNonEmptyClose) {
 
         var candleStickSizeSeconds = 60;
 
@@ -164,7 +164,7 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
 
         }
 
-        this.storage.push(toBePushed, callback);
+        this.storage.pushBulk('1', toBePushed, callback);
 
       }.bind(this));
 
@@ -195,7 +195,7 @@ processor.prototype.processUpdate = function(err) {
 
   } else {
 
-    this.storage.getLastNCandles('60', 1, function(err, candleSticks) {
+    this.storage.getLastNCandles('1', 1, function(err, candleSticks) {
 
       var latestCandleStick = candleSticks[0];
 
@@ -254,9 +254,9 @@ processor.prototype.processTickUpdate = function(err) {
 
 };
 
-processor.prototype.updateCandleDB = function(ticks) {
+processor.prototype.updateCandleDB = function(candleStickSizeSeconds, ticks) {
 
-  this.storage.getLastNonEmptyPeriod('60', function(err, period) {
+  this.storage.getLastNonEmptyPeriod(candleStickSizeSeconds, function(err, period) {
 
     var newTicks = _.filter(ticks,function(tick){
 

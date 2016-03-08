@@ -24,7 +24,7 @@ var storage = new storageservice(config.exchangeSettings, config.mongoConnection
 var exchangeapi = new exchangeapiservice(config.exchangeSettings, config.apiSettings, logger);
 var retriever = new dataretriever(config.downloaderRefreshSeconds, exchangeapi, logger);
 var processor = new dataprocessor(storage, logger);
-var aggregator = new candleaggregator(config.indicatorSettings.candleStickSizeMinutes, storage, logger);
+var aggregator = new candleaggregator(config.indicatorSettings.candleStickSizeMinutesArray, storage, logger);
 var advisor = new tradingadvisor(config.indicatorSettings, storage, logger);
 var agent = new tradingagent(config.tradingEnabled, config.exchangeSettings, storage, exchangeapi, logger);
 var pusher = new pushservice(config.pushOver, logger);
@@ -39,7 +39,7 @@ var trader = function() {
 
     this.logger.log('Processing trades!');
     processor.updateTickDB(ticks);
-    processor.updateCandleDB(ticks);
+    processor.updateCandleDB('1', ticks); //1 min candles
     insights.update();
 
   });
@@ -47,14 +47,13 @@ var trader = function() {
   processor.on('initialDBWrite', function(){
 
     reporter.start();
-
     advisor.start();
 
   });
 
   processor.on('update', function(cs){
     this.logger.log('Processor update...');
-    aggregator.update();
+    aggregator.update(); //all other candles
 
   });
 
@@ -64,11 +63,11 @@ var trader = function() {
 
     if(advice === 'buy') {
 
-      agent.order(advice);
+      //agent.order(advice);
 
     } else if(advice === 'sell') {
 
-      agent.order(advice);
+      //agent.order(advice);
 
     }
 

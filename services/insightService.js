@@ -26,9 +26,10 @@ insights.prototype.update = function(callback) {
   this.storage.getLastNTicks(100, function(err, ticks) {
   	for(var i = 0; i < ticks.length; i++){
   		this.indicator = this.MACD.calculateFromTick(ticks[i]).indicator;
-  		if(this.indicator !== null)
-  			this.logger.log('Close: '+this.indicator.close+' | MACD: '+this.indicator.macd+' | emaLong: '+this.indicator.emaLong+' | emaShort: '+this.indicator.emaShort+' | macdSignal: '+this.indicator.macdSignal+' | Histogram: '+this.indicator.macdHistogram);
+  		if(this.indicator !== null){
+  			//this.logger.log('Close: '+this.indicator.close+' | MACD: '+this.indicator.macd+' | emaLong: '+this.indicator.emaLong+' | emaShort: '+this.indicator.emaShort+' | macdSignal: '+this.indicator.macdSignal+' | Histogram: '+this.indicator.macdHistogram);
   			//this.logger.log('MACD '+i+': '+this.MACD.calculateFromTick(ticks[i]).indicator.macd);
+      }
   	}
   }.bind(this));
 }

@@ -19,6 +19,7 @@ Util.inherits(aggregator, EventEmitter);
 //---EventEmitter Setup
 
 aggregator.prototype.update = function() {
+  this.logger.log('aggregator updating...');
 
   this.storage.getLastCompleteAggregatedCandleStick(this.candleStickSizeMinutes, function(err, completeCandleStick) {
 

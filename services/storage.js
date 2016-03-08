@@ -7,8 +7,8 @@ var storage = function(exchangeSettings, mongoConnectionString, logger) {
 
   this.pair = exchangeSettings.currencyPair.pair;
   this.exchange = exchangeSettings.exchange;
-  this.exchangePair = exchangeSettings.exchange + exchangeSettings.currencyPair.pair;
-  this.exchangeTicks = exchangeSettings.exchange + 'Ticks';
+  this.exchangeCandleBase = exchangeSettings.exchange + exchangeSettings.currencyPair.pair + '_Candle';
+  this.exchangeTicks = exchangeSettings.exchange+ exchangeSettings.currencyPair.pair + '_Ticks';
   this.mongoConnectionString = mongoConnectionString;
   this.logger = logger;
 
@@ -48,7 +48,7 @@ storage.prototype.pushTicks = function(csArray, callback) {
 storage.prototype.push = function(csArray, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+'60');
 
   var bulk = csCollection.initializeOrderedBulkOp();
 
@@ -122,10 +122,10 @@ storage.prototype.getLastNTicks = function(N, callback) {
 
 };
 
-storage.prototype.getLastNCandles = function(N, callback) {
+storage.prototype.getLastNCandles = function(candleStickSizeSeconds, N, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
 
   csCollection.find({}).sort({period:-1}).limit(N, function(err, candlesSticks) {
 
@@ -146,10 +146,10 @@ storage.prototype.getLastNCandles = function(N, callback) {
 
 };
 
-storage.prototype.getAllCandles = function(callback) {
+storage.prototype.getAllCandles = function(candleStickSizeSeconds, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
 
   csCollection.find({}).sort({period:1}, function(err, candlesSticks) {
 
@@ -170,10 +170,10 @@ storage.prototype.getAllCandles = function(callback) {
 
 };
 
-storage.prototype.getAllCandlesSince = function(period, callback) {
+storage.prototype.getAllCandlesSince = function(candleStickSizeSeconds, period, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
 
   csCollection.find({period: { $gte: period }}).sort({period:1}, function(err, candlesSticks) {
 
@@ -194,10 +194,10 @@ storage.prototype.getAllCandlesSince = function(period, callback) {
 
 };
 
-storage.prototype.getLastClose = function(callback) {
+storage.prototype.getLastClose = function(candleStickSizeSeconds, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
 
   csCollection.find({}).sort({period:-1}).limit(1, function(err, candleSticks) {
 
@@ -221,10 +221,10 @@ storage.prototype.getLastClose = function(callback) {
 
 };
 
-storage.prototype.getLastNonEmptyPeriod = function(callback) {
+storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeSeconds, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
 
   csCollection.find({volume: { $gt: 0 }}).sort({period:-1}).limit(1, function(err, candleSticks) {
 
@@ -248,10 +248,10 @@ storage.prototype.getLastNonEmptyPeriod = function(callback) {
 
 };
 
-storage.prototype.getLastNonEmptyClose = function(callback) {
+storage.prototype.getLastNonEmptyClose = function(candleStickSizeSeconds, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
 
   csCollection.find({volume: { $gt: 0 }}).sort({period:-1}).limit(1, function(err, candleSticks) {
 
@@ -311,7 +311,7 @@ storage.prototype.getLastNAggregatedCandleSticks = function(N, candleStickSize, 
 
   var startRange = closestCandleStick - (candleStickSizeSeconds * N);
 
-  this.getAllCandlesSince(startRange, function(err, candleSticks) {
+  this.getAllCandlesSince('60', startRange, function(err, candleSticks) {
 
     if(candleSticks.length > 0) {
 
@@ -331,7 +331,7 @@ storage.prototype.getLastNAggregatedCandleSticks = function(N, candleStickSize, 
 
 storage.prototype.getAggregatedCandleSticks = function(candleStickSize, callback) {
 
-  this.getAllCandlesSince(0, function(err, candleSticks) {
+  this.getAllCandlesSince('60', 0, function(err, candleSticks) {
 
     if(candleSticks.length > 0) {
 
@@ -351,7 +351,7 @@ storage.prototype.getAggregatedCandleSticks = function(candleStickSize, callback
 
 storage.prototype.getAggregatedCandleSticksSince = function(candleStickSize, period, callback) {
 
-  this.getAllCandlesSince(period, function(err, candleSticks) {
+  this.getAllCandlesSince('60', period, function(err, candleSticks) {
 
     if(candleSticks.length > 0) {
 
@@ -440,10 +440,10 @@ storage.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks
 
 storage.prototype.removeOldDBCandles = function(candleStickSize, callback) {
 
-  var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangePair);
-
   var candleStickSizeSeconds = candleStickSize * 60;
+
+  var csDatastore = mongo(this.mongoConnectionString);
+  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
 
   var now = Math.floor(tools.unixTimeStamp(new Date().getTime()) / candleStickSizeSeconds) * candleStickSizeSeconds;
   var oldPeriod = now - (candleStickSizeSeconds * 10000);

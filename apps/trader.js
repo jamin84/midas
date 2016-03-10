@@ -23,8 +23,8 @@ var logger = new loggingservice('trader', config.debug);
 var storage = new storageservice(config.exchangeSettings, config.mongoConnectionString, logger);
 var exchangeapi = new exchangeapiservice(config.exchangeSettings, config.apiSettings, logger);
 var retriever = new dataretriever(config.downloaderRefreshSeconds, exchangeapi, logger);
-var processor = new dataprocessor(storage, logger);
-var aggregator = new candleaggregator(config.indicatorSettings.candleStickSizeMinutesArray, storage, logger);
+var processor = new dataprocessor(config.indicatorSettings, storage, logger);
+var aggregator = new candleaggregator(config.indicatorSettings, storage, logger);
 var advisor = new tradingadvisor(config.indicatorSettings, storage, logger);
 var agent = new tradingagent(config.tradingEnabled, config.exchangeSettings, storage, exchangeapi, logger);
 var pusher = new pushservice(config.pushOver, logger);
@@ -53,11 +53,10 @@ var trader = function() {
 
   processor.on('update', function(cs){
     this.logger.log('Processor update...');
-    aggregator.update(); //all other candles
-
+    aggregator.update();
   });
 
-  aggregator.on('update', function(cs){
+  aggregator.on('update', function(csMinutes, cs){
 
     var advice = advisor.update(cs, false);
 

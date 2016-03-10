@@ -1,12 +1,14 @@
 var _ = require('underscore');
 var async = require('async');
 var tools = require('../util/tools.js');
+var indicatorMACD = require('../indicators/MACD');
 
-var processor = function(storage, logger) {
+var processor = function(indicatorSettings, storage, logger) {
 
   this.initialDBWriteDone = false;
   this.storage = storage;
   this.logger = logger;
+  this.MACD = new indicatorMACD(indicatorSettings.options, logger);
 
   _.bindAll(this, 'updateCandleStick', 'createCandleSticks', 'processTickUpdate', 'processUpdate', 'updateCandleDB', 'updateTickDB');
 
@@ -72,6 +74,8 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
 
         var toBePushed = [];
 
+        var indicator = {};
+
         var previousClose = lastNonEmptyClose;
 
         var tickTimeStamp = ticks[0].date;
@@ -91,18 +95,20 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
 
         while(endTimeStamp < ticks[0].date) {
 
-          toBePushed.push({'period':startTimeStamp,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose});
+          toBePushed.push({'period':startTimeStamp,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'MACD': null});
 
           startTimeStamp = endTimeStamp;
           endTimeStamp = endTimeStamp + candleStickSizeSeconds;
 
         }
 
-        var currentCandleStick = {'period':startTimeStamp,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0,'vwap':undefined};
+        var currentCandleStick = {'period':startTimeStamp,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0,'vwap':undefined, 'MACD': null};
 
         ticks.forEach(function(tick) {
 
           tickTimeStamp = tick.date;
+
+          indicator = this.MACD.calculateFromTick(tick).indicator;
 
           if(toBePushed.length > 0) {
             previousClose = _.last(toBePushed).close;
@@ -117,7 +123,7 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
             startTimeStamp = endTimeStamp;
             endTimeStamp = endTimeStamp + candleStickSizeSeconds;
 
-            toBePushed.push({'period':startTimeStamp,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose});
+            toBePushed.push({'period':startTimeStamp,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'MACD': indicator});
 
           }
 
@@ -130,7 +136,7 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
             startTimeStamp = endTimeStamp;
             endTimeStamp = endTimeStamp + candleStickSizeSeconds;
 
-            currentCandleStick = {'period':startTimeStamp,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0, 'vwap':undefined};
+            currentCandleStick = {'period':startTimeStamp,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0, 'vwap':undefined, 'MACD': indicator};
 
           }
 
@@ -155,12 +161,13 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
           previousClose = _.last(toBePushed).close;
         }
 
+
         for(var i = startTimeStamp;i <= stopTimeStamp;i = i + candleStickSizeSeconds) {
 
           var beginPeriod = i;
           var endPeriod = beginPeriod + candleStickSizeSeconds;
 
-          toBePushed.push({'period':beginPeriod,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose});
+          toBePushed.push({'period':beginPeriod,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'MACD': indicator});
 
         }
 

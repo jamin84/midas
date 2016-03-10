@@ -7,6 +7,7 @@ var storage = function(exchangeSettings, mongoConnectionString, logger) {
 
   this.pair = exchangeSettings.currencyPair.pair;
   this.exchange = exchangeSettings.exchange;
+  this.exchangeBase = exchangeSettings.exchange + exchangeSettings.currencyPair.pair;
   this.exchangeCandleBase = exchangeSettings.exchange + exchangeSettings.currencyPair.pair + '_Candle';
   this.exchangeTicks = exchangeSettings.exchange+ exchangeSettings.currencyPair.pair + '_Ticks';
   this.mongoConnectionString = mongoConnectionString;
@@ -80,6 +81,30 @@ storage.prototype.push = function(candleStickSizeMinutes, csObject, callback) {
 
   var csDatastore = mongo(this.mongoConnectionString);
   var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+
+  csCollection.insert(csObject, function(err, doc) {
+
+    csDatastore.close();
+
+    if(err) {
+
+      callback(err);
+
+    } else {
+
+      callback(null);
+
+    }
+
+  });
+
+};
+
+storage.prototype.pushIndicator = function(csObject, indicator, callback) {
+  this.logger.log('* Pushing to '+this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  
+  var csDatastore = mongo(this.mongoConnectionString);
+  var csCollection = csDatastore.collection(this.exchangeIndicatorBase+'_'+indicator);
 
   csCollection.insert(csObject, function(err, doc) {
 

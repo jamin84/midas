@@ -81,6 +81,26 @@ indicator.prototype.calculate = function(cs) {
 
 };
 
+indicator.prototype.calculateFromCandles = function(cs, previousCS) {
+  if( !previousCS ){
+    return {}
+  }
+
+  var previousIndicator = previousCS;
+
+  var usePrice = cs.close;
+
+  var emaLong = calculateEma(this.options.longPeriods, usePrice, this.previousIndicator.emaLong);
+  var emaShort = calculateEma(this.options.shortPeriods, usePrice, this.previousIndicator.emaShort);
+
+  var macd = emaShort - emaLong;
+  var macdSignal = calculateEma(this.options.emaPeriods, macd, this.previousIndicator.macdSignal);
+  var macdHistogram = tools.round(macd - macdSignal, 8);
+  
+  return {'emaLong': emaLong, 'emaShort': emaShort, 'macd': macd, 'macdSignal': macdSignal, 'result': macdHistogram};;
+
+}
+
 indicator.prototype.calculateFromTick = function(tick) {
 
   this.length += 1;

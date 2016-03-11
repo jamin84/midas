@@ -55,11 +55,15 @@ storage.prototype.pushBulk = function(candleStickSizeMinutes, csArray, callback)
 */
   var csDatastore = mongo(this.mongoConnectionString);
   var csCollection = csDatastore.collection(this.exchangeInfoBase);
+  var candle =  candleStickSizeMinutes+'min';
 
   var bulk = csCollection.initializeOrderedBulkOp();
 
+
   _.forEach(csArray, function(cs) {
-    bulk.find({period: cs.period}).upsert().updateOne(cs);
+    var set = {};
+    set[candle] = cs[candle];
+    bulk.find({period: cs.period}).upsert().updateOne({$set : set});
   });
 
   bulk.execute(function(err, res) {
@@ -552,6 +556,9 @@ storage.prototype.removeOldDBCandles = function(candleStickSizeMinutes, callback
 
   var now = Math.floor(tools.unixTimeStamp(new Date().getTime()) / candleStickSizeSeconds) * candleStickSizeSeconds;
   var oldPeriod = now - (candleStickSizeSeconds * 10000);
+
+
+  console.log('\n\n\n\n ******* removing old candles, oldPeriod: '+oldPeriod);
 
   csCollection.remove({ period: { $lt: oldPeriod } }, function(err, resp) {
 

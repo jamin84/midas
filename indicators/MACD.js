@@ -97,7 +97,7 @@ indicator.prototype.calculateFromCandles = function(cs, previousCS) {
   var macdSignal = calculateEma(this.options.emaPeriods, macd, this.previousIndicator.macdSignal);
   var macdHistogram = tools.round(macd - macdSignal, 8);
   
-  return {'emaLong': emaLong, 'emaShort': emaShort, 'macd': macd, 'macdSignal': macdSignal, 'result': macdHistogram};;
+  return {'emaLong': emaLong, 'emaShort': emaShort, 'macd': macd, 'macdSignal': macdSignal, 'macdHistogram': macdHistogram};;
 
 }
 

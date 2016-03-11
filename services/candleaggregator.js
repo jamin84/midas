@@ -71,6 +71,7 @@ aggregator.prototype.update = function() {
             } else {
 
               this.storage.getLastNCandles(candleStickSizeMinutes, 1, function(err, candleSticks) {
+                this.logger.log('\n\n\n\n'+JSON.stringify(candleSticks));
 
                 var latestCandleStick = candleSticks[0];
                 this.emit('update', candleStickSizeMinutes, latestCandleStick);
@@ -82,13 +83,13 @@ aggregator.prototype.update = function() {
           }.bind(this));
 
           this.previousCompleteCandleStick[candleStickSizeMinutes] = completeCandleStick;
-
+/*
           this.storage.removeOldDBCandles(candleStickSizeMinutes, function(err) {
 
             this.emit('update', candleStickSizeMinutes, completeCandleStick);
 
           }.bind(this));
-
+*/
         }
 
       }

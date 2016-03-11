@@ -32,31 +32,31 @@ processor.prototype.updateTickDB = function(ticks) {
 
 };
 
-processor.prototype.updateCandleStick = function (candleStick, tick) {
+processor.prototype.updateCandleStick = function (candleStickSizeMinutes, candleStick, tick) {
 
-  if(!candleStick.open) {
+  if(!candleStick[candleStickSizeMinutes].open) {
 
-    candleStick.open = tick.price;
-    candleStick.high = tick.price;
-    candleStick.low = tick.price;
-    candleStick.close = tick.price;
-    candleStick.volume = tick.amount;
-    candleStick.vwap = tick.price;
+    candleStick[candleStickSizeMinutes].open = tick.price;
+    candleStick[candleStickSizeMinutes].high = tick.price;
+    candleStick[candleStickSizeMinutes].low = tick.price;
+    candleStick[candleStickSizeMinutes].close = tick.price;
+    candleStick[candleStickSizeMinutes].volume = tick.amount;
+    candleStick[candleStickSizeMinutes].vwap = tick.price;
 
   } else {
 
-    var currentVwap = candleStick.vwap * candleStick.volume;
+    var currentVwap = candleStick[candleStickSizeMinutes].vwap * candleStick[candleStickSizeMinutes].volume;
     var newVwap = tick.price * tick.amount;
 
-    candleStick.high = _.max([candleStick.high, tick.price]);
-    candleStick.low = _.min([candleStick.low, tick.price]);
+    candleStick[candleStickSizeMinutes].high = _.max([candleStick[candleStickSizeMinutes].high, tick.price]);
+    candleStick[candleStickSizeMinutes].low = _.min([candleStick[candleStickSizeMinutes].low, tick.price]);
 
-    candleStick.volume = tools.round(candleStick.volume + tick.amount, 8);
-    candleStick.vwap = tools.round((currentVwap + newVwap) / candleStick.volume, 8);
+    candleStick[candleStickSizeMinutes].volume = tools.round(candleStick[candleStickSizeMinutes].volume + tick.amount, 8);
+    candleStick[candleStickSizeMinutes].vwap = tools.round((currentVwap + newVwap) / candleStick[candleStickSizeMinutes].volume, 8);
 
   }
 
-  candleStick.close = tick.price;
+  candleStick[candleStickSizeMinutes].close = tick.price;
 
   return candleStick;
 
@@ -95,60 +95,60 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
 
         while(endTimeStamp < ticks[0].date) {
 
-          toBePushed.push({'period':startTimeStamp,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'MACD': null});
+          toBePushed.push({'period':startTimeStamp, '1min': {'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'macd': undefined, 'macdSignal': undefined, 'macdHistogram': undefined}});
 
           startTimeStamp = endTimeStamp;
           endTimeStamp = endTimeStamp + candleStickSizeSeconds;
 
         }
 
-        var currentCandleStick = {'period':startTimeStamp,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0,'vwap':undefined, 'MACD': null};
+        var currentCandleStick = {'period':startTimeStamp, '1min': {'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0,'vwap':undefined, 'macd': undefined, 'macdSignal': undefined, 'macdHistogram': undefined}};
 
         ticks.forEach(function(tick) {
 
           tickTimeStamp = tick.date;
 
-          indicator = this.MACD.calculateFromTick(tick).indicator;
+          indicator = this.MACD.calculateFromTick(tick);
 
           if(toBePushed.length > 0) {
-            previousClose = _.last(toBePushed).close;
+            previousClose = _.last(toBePushed)['1min'].close;
           }
 
           while(tickTimeStamp >= endTimeStamp + candleStickSizeSeconds) {
 
-            if(currentCandleStick.volume > 0) {
+            if(currentCandleStick['1min'].volume > 0) {
               toBePushed.push(currentCandleStick);
             }
 
             startTimeStamp = endTimeStamp;
             endTimeStamp = endTimeStamp + candleStickSizeSeconds;
 
-            toBePushed.push({'period':startTimeStamp,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'MACD': indicator});
+            toBePushed.push({'period':startTimeStamp, '1min': {'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'macd': indicator.macd, 'macdSignal' : indicator.macdSignal, 'macdHistogram' : indicator.macdHistogram}});
 
           }
 
           if(tickTimeStamp >= endTimeStamp) {
 
-            if(currentCandleStick.volume > 0) {
+            if(currentCandleStick['1min'].volume > 0) {
               toBePushed.push(currentCandleStick);
             }
 
             startTimeStamp = endTimeStamp;
             endTimeStamp = endTimeStamp + candleStickSizeSeconds;
 
-            currentCandleStick = {'period':startTimeStamp,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0, 'vwap':undefined, 'MACD': indicator};
+            currentCandleStick = {'period':startTimeStamp, '1min': {'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0, 'vwap':undefined, 'macd': indicator.macd, 'macdSignal' : indicator.macdSignal, 'macdHistogram' : indicator.macdHistogram}};
 
           }
 
           if(tickTimeStamp >= startTimeStamp && tickTimeStamp < endTimeStamp) {
 
-            currentCandleStick = this.updateCandleStick(currentCandleStick,tick);
+            currentCandleStick = this.updateCandleStick('1min', currentCandleStick, tick);
 
           }
 
         }.bind(this));
 
-        if(currentCandleStick.volume > 0) {
+        if(currentCandleStick['1min'].volume > 0) {
 
           toBePushed.push(currentCandleStick);
 
@@ -158,7 +158,7 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
         }
 
         if(toBePushed.length > 0) {
-          previousClose = _.last(toBePushed).close;
+          previousClose = _.last(toBePushed)['1min'].close;
         }
 
 
@@ -167,7 +167,8 @@ processor.prototype.createCandleSticks = function(ticks, callback) {
           var beginPeriod = i;
           var endPeriod = beginPeriod + candleStickSizeSeconds;
 
-          toBePushed.push({'period':beginPeriod,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'MACD': indicator});
+          //toBePushed.push({'period':beginPeriod,'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'MACD': indicator});
+          toBePushed.push({'period':beginPeriod, '1min' : {'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0, 'vwap':previousClose, 'macd': indicator.macd, 'macdSignal' : indicator.macdSignal, 'macdHistogram' : indicator.macdHistogram}});
 
         }
 
@@ -261,9 +262,9 @@ processor.prototype.processTickUpdate = function(err) {
 
 };
 
-processor.prototype.updateCandleDB = function(candleStickSizeSeconds, ticks) {
+processor.prototype.updateCandleDB = function(candleStickSizeMinutes, ticks) {
 
-  this.storage.getLastNonEmptyPeriod(candleStickSizeSeconds, function(err, period) {
+  this.storage.getLastNonEmptyPeriod(candleStickSizeMinutes, function(err, period) {
 
     var newTicks = _.filter(ticks,function(tick){
 

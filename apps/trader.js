@@ -47,7 +47,7 @@ var trader = function() {
   processor.on('initialDBWrite', function(){
 
     reporter.start();
-    advisor.start();
+    //advisor.start();
 
   });
 
@@ -58,6 +58,7 @@ var trader = function() {
 
   aggregator.on('update', function(csMinutes, cs){
 
+/*
     var advice = advisor.update(cs, false);
 
     if(advice === 'buy') {
@@ -69,7 +70,7 @@ var trader = function() {
       //agent.order(advice);
 
     }
-
+*/
   });
 
   advisor.on('advice', function(result) {

@@ -8,7 +8,7 @@ var storage = function(exchangeSettings, mongoConnectionString, logger) {
   this.pair = exchangeSettings.currencyPair.pair;
   this.exchange = exchangeSettings.exchange;
   this.exchangeBase = exchangeSettings.exchange + exchangeSettings.currencyPair.pair;
-  this.exchangeCandleBase = exchangeSettings.exchange + exchangeSettings.currencyPair.pair + '_Candle';
+  this.exchangeInfoBase = this.exchangeBase + '_Info';
   this.exchangeTicks = exchangeSettings.exchange+ exchangeSettings.currencyPair.pair + '_Ticks';
   this.mongoConnectionString = mongoConnectionString;
   this.logger = logger;
@@ -47,10 +47,14 @@ storage.prototype.pushTicks = function(csArray, callback) {
 };
 
 storage.prototype.pushBulk = function(candleStickSizeMinutes, csArray, callback) {
-  this.logger.log('* Pushing to '+this.exchangeCandleBase+candleStickSizeMinutes.toString());
-
+  //this.logger.log('* Pushing BULK to '+this.exchangeInfoBase+' | '+candleStickSizeMinutes+'min candle');
+  /*
+  for(var i=0; i<csArray.length; i++){
+    this.logger.log('\n csArray['+i+']: '+JSON.stringify(csArray[i]));
+  }
+*/
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
   var bulk = csCollection.initializeOrderedBulkOp();
 
@@ -77,34 +81,39 @@ storage.prototype.pushBulk = function(candleStickSizeMinutes, csArray, callback)
 };
 
 storage.prototype.push = function(candleStickSizeMinutes, csObject, callback) {
-  this.logger.log('* Pushing to '+this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  this.logger.log('* Pushing to '+this.exchangeInfoBase+' at period: '+csObject.period+' for '+candleStickSizeMinutes+'min candle');
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
+  var candle =  candleStickSizeMinutes+'min';
+ 
+  var set = {};
+  set[candle] = csObject[candle];
 
-  csCollection.insert(csObject, function(err, doc) {
+  csCollection.update({period: csObject.period}, { $set : set },
+    function(err, doc) {
 
-    csDatastore.close();
+      csDatastore.close();
 
-    if(err) {
+      if(err) {
 
-      callback(err);
+        callback(err);
 
-    } else {
+      } else {
+        console.log('\n\n\nsuccess\n\n\n');
+        callback(null);
 
-      callback(null);
-
+      }
     }
-
-  });
+  );
 
 };
 
 storage.prototype.pushIndicator = function(csObject, indicator, callback) {
-  this.logger.log('* Pushing to '+this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  this.logger.log('* Pushing to '+this.exchangeInfoBase);
   
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeIndicatorBase+'_'+indicator);
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
   csCollection.insert(csObject, function(err, doc) {
 
@@ -174,12 +183,16 @@ storage.prototype.getLastNTicks = function(N, callback) {
 
 storage.prototype.getLastNCandles = function(candleStickSizeMinutes, N, callback) {
 
+  var candleMin = candleStickSizeMinutes+'min';
   this.logger.log('* getLastNCandles, size: '+candleStickSizeMinutes+' | N: '+N);
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
-  csCollection.find({}).sort({period:-1}).limit(N, function(err, candlesSticks) {
+  var query = {};
+  query[candleMin] = { $exists: true };
+
+  csCollection.find(query).sort({period:-1}).limit(N, function(err, candlesSticks) {
 
     csDatastore.close();
 
@@ -200,10 +213,14 @@ storage.prototype.getLastNCandles = function(candleStickSizeMinutes, N, callback
 
 storage.prototype.getAllCandles = function(candleStickSizeMinutes, callback) {
 
+  var candleMin = candleStickSizeMinutes+'min';
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
-  csCollection.find({}).sort({period:1}, function(err, candlesSticks) {
+  var query = {};
+  query[candleMin] = { $exists: true };
+
+  csCollection.find(query).sort({period:1}, function(err, candlesSticks) {
 
     csDatastore.close();
 
@@ -224,11 +241,14 @@ storage.prototype.getAllCandles = function(candleStickSizeMinutes, callback) {
 
 storage.prototype.getAllCandlesSince = function(candleStickSizeMinutes, period, callback) {
 
+  var candleMin = candleStickSizeMinutes+'min';
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes);
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
+  var query = {};
+  query['period'] = { $gte: period };
+  query[candleMin] = { $exists: true };
 
-  csCollection.find({period: { $gte: period }}).sort({period:1}, function(err, candlesSticks) {
-
+  csCollection.find(query).sort({period:1}, function(err, candlesSticks) {
     csDatastore.close();
 
     if(err) {
@@ -248,10 +268,14 @@ storage.prototype.getAllCandlesSince = function(candleStickSizeMinutes, period, 
 
 storage.prototype.getLastClose = function(candleStickSizeMinutes, callback) {
 
+  var candleMin = candleStickSizeMinutes+'min';
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
-  csCollection.find({}).sort({period:-1}).limit(1, function(err, candleSticks) {
+  var query = {};
+  query[candleMin] = { $exists: true };
+
+  csCollection.find(query).sort({period:-1}).limit(1, function(err, candleSticks) {
 
     csDatastore.close();
 
@@ -275,10 +299,15 @@ storage.prototype.getLastClose = function(candleStickSizeMinutes, callback) {
 
 storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeMinutes, callback) {
 
+  var candleMin = candleStickSizeMinutes+'min';
+  var candleVol = candleMin+'volume';
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
+  var query = {};
+  query[candleMin] = { $exists: true };
+  query[candleVol] = { $gt: 0 };
 
-  csCollection.find({volume: { $gt: 0 }}).sort({period:-1}).limit(1, function(err, candleSticks) {
+  csCollection.find(query).sort({period:-1}).limit(1, function(err, candleSticks) {
 
     csDatastore.close();
 
@@ -302,10 +331,16 @@ storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeMinutes, callb
 
 storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callback) {
 
+  var candleMin = candleStickSizeMinutes+'min';
+  var candleVol = candleMin+'volume';
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeMinutes.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
-  csCollection.find({volume: { $gt: 0 }}).sort({period:-1}).limit(1, function(err, candleSticks) {
+  var query = {};
+  query[candleMin] = { $exists: true };
+  query[candleVol] = { $gte:0 };
+
+  csCollection.find(query).sort({period:-1}).limit(1, function(err, candleSticks) {
 
     csDatastore.close();
 
@@ -328,6 +363,7 @@ storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callba
 };
 
 storage.prototype.getLastNCompleteAggregatedCandleSticks = function(N, candleStickSizeMinutes, callback) {
+  var candleMin = candleStickSizeMinutes+'min';
   this.logger.log('* getLastNCompleteAggregatedCandleSticks callback, size: '+candleStickSizeMinutes);
 
   this.getLastNAggregatedCandleSticks(N + 1, candleStickSizeMinutes, function(err, candleStickSizeMinutes, aggregatedCandleSticks) {
@@ -350,8 +386,8 @@ storage.prototype.getCompleteAggregatedCandleSticks = function(candleStickSizeMi
 storage.prototype.getLastCompleteAggregatedCandleStick = function(candleStickSizeMinutes, callback) {
 
   this.getLastNAggregatedCandleSticks(2, candleStickSizeMinutes, function(err, candleStickSizeMinutes, aggregatedCandleSticks) {
-    this.logger.log('**** Callback: getLastNAggregatedCandleSticks, size: '+candleStickSizeMinutes);
-    this.logger.log('**** Callback: aggregatedCandleSticks: '+JSON.stringify(aggregatedCandleSticks));
+    //this.logger.log('**** Callback: getLastNAggregatedCandleSticks, size: '+candleStickSizeMinutes);
+    //this.logger.log('**** Callback: aggregatedCandleSticks: '+JSON.stringify(aggregatedCandleSticks));
     aggregatedCandleSticks.pop();
     callback(null, candleStickSizeMinutes, _.last(aggregatedCandleSticks));
   }.bind(this));
@@ -359,7 +395,8 @@ storage.prototype.getLastCompleteAggregatedCandleStick = function(candleStickSiz
 };
 
 storage.prototype.getLastNAggregatedCandleSticks = function(N, candleStickSizeMinutes, callback) {
-    this.logger.log('** getLastNAggregatedCandleSticks, size: '+candleStickSizeMinutes);
+  var candleMin = candleStickSizeMinutes+'min';
+  this.logger.log('** getLastNAggregatedCandleSticks, size: '+candleStickSizeMinutes);
 
   var candleStickSizeSeconds = candleStickSizeMinutes * 60;
 
@@ -427,20 +464,30 @@ storage.prototype.getAggregatedCandleSticksSince = function(candleStickSizeMinut
 
 };
 
-storage.prototype.calculateAggregatedCandleStick = function(period, relevantSticks) {
+storage.prototype.calculateAggregatedCandleStick = function(candleStickSizeMinutes, period, relevantSticks) {
 
-  var currentCandleStick = {'period':period,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0, 'vwap':undefined};
+  //var currentCandleStick = {'period':period,'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0, 'vwap':undefined};
+  var currentCandleStick = {};
+  var candleMinute = candleStickSizeMinutes+'min';
+  var candleInfo = {'open':undefined,'high':undefined,'low':undefined,'close':undefined,'volume':0,'vwap':undefined, 'macd': undefined, 'macdSignal': undefined, 'macdHistogram': undefined};
+  
+  console.log('******** relevantSticks[0]['+candleMinute+']: '+JSON.stringify(relevantSticks[0]['1min']));
 
-  currentCandleStick.open = relevantSticks[0].open;
-  currentCandleStick.high = _.max(relevantSticks, function(relevantStick) { return relevantStick.high; }).high;
-  currentCandleStick.low = _.min(relevantSticks, function(relevantStick) { return relevantStick.low; }).low;
-  currentCandleStick.close = relevantSticks[relevantSticks.length - 1].close;
-  currentCandleStick.volume = tools.round(_.reduce(relevantSticks, function(memo, entry) { return memo + entry.volume; }, 0), 8);
-  if(currentCandleStick.volume === 0) {
-    currentCandleStick.vwap = currentCandleStick.close;
+  candleInfo.open = relevantSticks[0]['1min'].open;
+  candleInfo.high = _.max(relevantSticks, function(relevantStick) { return relevantStick['1min'].high; })['1min'].high;
+  candleInfo.low = _.min(relevantSticks, function(relevantStick) { return relevantStick['1min'].low; })['1min'].low;
+  candleInfo.close = relevantSticks[relevantSticks.length - 1]['1min'].close;
+  candleInfo.volume = tools.round(_.reduce(relevantSticks, function(memo, entry) { return memo + entry['1min'].volume; }, 0), 8);
+  if(candleInfo.volume === 0) {
+    candleInfo.vwap = candleInfo.close;
   } else {
-    currentCandleStick.vwap = tools.round(_.reduce(relevantSticks, function(memo, entry) { return memo + (entry.vwap * entry.volume); }, 0) / currentCandleStick.volume, 8);
+    candleInfo.vwap = tools.round(_.reduce(relevantSticks, function(memo, entry) { return memo + (entry['1min'].vwap * entry['1min'].volume); }, 0) / candleInfo.volume, 8);
   }
+
+  currentCandleStick['period'] = period;
+  currentCandleStick[candleMinute] = candleInfo;
+
+  console.log('******** aggregated candleStick: '+JSON.stringify(currentCandleStick));
 
   return currentCandleStick;
 
@@ -459,10 +506,10 @@ storage.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks
 
   var relevantSticks = [];
 
-  var filterOnVolume = function(candleStick) { return candleStick.volume > 0; };
+  var filterOnVolume = function(candleStick) { return candleStick['1min'].volume > 0; };
 
   _.each(candleSticks, function(candleStick) {
-
+    console.log('******* candleStick: '+JSON.stringify(candleStick));
     if(candleStick.period >= beginPeriod && candleStick.period < endPeriod) {
 
       relevantSticks.push(candleStick);
@@ -475,7 +522,7 @@ storage.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks
         relevantSticks = vrelevantSticks;
       }
 
-      aggregatedCandleSticks.push(this.calculateAggregatedCandleStick(beginPeriod, relevantSticks));
+      aggregatedCandleSticks.push(this.calculateAggregatedCandleStick(candleStickSize, beginPeriod, relevantSticks));
 
       beginPeriod = endPeriod;
       endPeriod = endPeriod + candleStickSizeSeconds;
@@ -489,7 +536,7 @@ storage.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks
   }.bind(this));
 
   if(relevantSticks.length > 0) {
-    aggregatedCandleSticks.push(this.calculateAggregatedCandleStick(beginPeriod, relevantSticks));
+    aggregatedCandleSticks.push(this.calculateAggregatedCandleStick(candleStickSize, beginPeriod, relevantSticks));
   }
 
   return aggregatedCandleSticks;
@@ -501,7 +548,7 @@ storage.prototype.removeOldDBCandles = function(candleStickSizeMinutes, callback
   var candleStickSizeSeconds = candleStickSizeMinutes * 60;
 
   var csDatastore = mongo(this.mongoConnectionString);
-  var csCollection = csDatastore.collection(this.exchangeCandleBase+candleStickSizeSeconds.toString());
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
   var now = Math.floor(tools.unixTimeStamp(new Date().getTime()) / candleStickSizeSeconds) * candleStickSizeSeconds;
   var oldPeriod = now - (candleStickSizeSeconds * 10000);

@@ -46,15 +46,13 @@ aggregator.prototype.update = function() {
         this.logger.log('***** Complete Candelstick Period: '+completeCandleStick.period+' | previousCompleteCandleStickPeriod: '+this.previousCompleteCandleStick[ candleStickSizeMinutes ].period) 
         if(completeCandleStick.period !== this.previousCompleteCandleStick[ candleStickSizeMinutes ].period) {
 
-          this.logger.log('\n*** Created a new '+ candleStickSizeMinutes +'min candlestick!');
-          this.logger.log('JSON: '+JSON.stringify(completeCandleStick));
+          this.logger.log('\n\n\n *** Created a new '+ candleStickSizeMinutes +'min candlestick! *** \n\n\n');
 
           var indicator = this.MACD.calculateFromCandles(completeCandleStick, this.previousCompleteCandleStick[ candleStickSizeMinutes ]);
 
-          this.logger.error('\n* Created new '+candleStickSizeMinutes+'min MACD indicator...');
-          this.logger.log('JSON: '+JSON.stringify(indicator));
+          _.extend(completeCandleStick[candleStickSizeMinutes+'min'], indicator);
 
-          completeCandleStick['MACD'] = indicator;
+          this.logger.log('JSON: '+JSON.stringify(completeCandleStick));
 
           this.storage.push(candleStickSizeMinutes, completeCandleStick, function(err){
             if(err) {
@@ -85,7 +83,7 @@ aggregator.prototype.update = function() {
 
           this.previousCompleteCandleStick[candleStickSizeMinutes] = completeCandleStick;
 
-          this.storage.removeOldDBCandles([candleStickSizeMinutes], function(err) {
+          this.storage.removeOldDBCandles(candleStickSizeMinutes, function(err) {
 
             this.emit('update', candleStickSizeMinutes, completeCandleStick);
 

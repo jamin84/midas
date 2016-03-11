@@ -121,11 +121,11 @@ indicator.prototype.calculateFromTick = function(tick) {
 
   if(this.length >= this.options.neededPeriods) {
 
-    return {indicator: this.indicator};
+    return this.indicator;
 
   } else {
 
-    return {indicator: null};
+    return {'close': usePrice, 'emaLong': emaLong, 'emaShort': emaShort, 'macd': null, 'macdSignal': null, 'macdHistogram': null};;
 
   }
 

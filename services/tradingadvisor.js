@@ -20,7 +20,7 @@ var advisor = function(indicatorSettings, storage, logger) {
       }
     }.bind(this));
 
-    this.selectedIndicator = new this.indicators[indicatorSettings.indicator](indicatorSettings.options);
+    this.selectedIndicator = new this.indicators[indicatorSettings.indicator](indicatorSettings);
 
   } catch(err) {
 

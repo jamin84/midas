@@ -20,7 +20,7 @@ var config = require('../config.js');
 
 //------------------------------InitializeModules
 var logger = new loggingservice('trader', config.debug);
-var storage = new storageservice(config.exchangeSettings, config.mongoConnectionString, logger);
+var storage = new storageservice(config.exchangeSettings, config.indicatorSettings, config.mongoConnectionString, logger);
 var exchangeapi = new exchangeapiservice(config.exchangeSettings, config.apiSettings, logger);
 var retriever = new dataretriever(config.downloaderRefreshSeconds, exchangeapi, logger);
 var processor = new dataprocessor(config.indicatorSettings, storage, logger);
@@ -40,13 +40,15 @@ var trader = function() {
     this.logger.log('Processing trades!');
     processor.updateTickDB(ticks);
     processor.updateCandleDB('1', ticks); //1 min candles
-    insights.update();
+    //insights.update();
 
   });
 
-  processor.on('initialDBWrite', function(){
-
-    reporter.start();
+  processor.on('initialDBWrite', function(initialCandles){
+    this.logger.log('initialDBWrite done!');
+    //console.log('\n\n\n\n'+JSON.stringify(initialCandles));
+    aggregator.createInitialIndicatorCandles(initialCandles); //create the non-1min indicator candles
+    //reporter.start();
     //advisor.start();
 
   });
@@ -98,7 +100,7 @@ var trader = function() {
   agent.on('realOrder',function(orderDetails){
 
     if(config.pushOver.enabled) {
-      pusher.send('BitBot - Order Placed!', 'Placed ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
+      pusher.send('Midas - Order Placed!', 'Placed ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
     }
 
     monitor.add(orderDetails, config.orderKeepAliveMinutes);
@@ -108,7 +110,7 @@ var trader = function() {
   agent.on('simulatedOrder',function(orderDetails){
 
     if(config.pushOver.enabled) {
-      pusher.send('BitBot - Order Simulated!', 'Simulated ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
+      pusher.send('Midas - Order Simulated!', 'Simulated ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
     }
 
     monitor.add(orderDetails, config.orderKeepAliveMinutes);
@@ -146,7 +148,7 @@ var trader = function() {
   reporter.on('report', function(report){
 
     if(config.pushOver.enabled) {
-      pusher.send('BitBot - Profit Report!', report, 'magic', 1);
+      pusher.send('Midas - Profit Report!', report, 'magic', 1);
     }
 
   });
@@ -172,7 +174,7 @@ trader.prototype.stop = function(cb) {
   retriever.stop();
 
   monitor.resolvePreviousOrder(function() {
-    logger.log('BitBot stopped succesfully!');
+    logger.log('Midas stopped succesfully!');
     cb();
   }.bind(this));
 

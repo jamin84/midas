@@ -8,7 +8,7 @@ var insights = function(indicatorSettings, storage, logger) {
   this.storage = storage;
   this.logger = logger;
   this.indicator = {};
-  this.MACD = new indicatorMACD(indicatorSettings.options, logger);
+  this.MACD = new indicatorMACD(indicatorSettings, logger);
 
    _.bindAll(this, 'update');
 
@@ -22,7 +22,7 @@ Util.inherits(insights, EventEmitter);
 
 insights.prototype.update = function(callback) {
   this.logger.log('Updating indicators...'); 
-
+/*
   this.storage.getLastNTicks(100, function(err, ticks) {
   	for(var i = 0; i < ticks.length; i++){
   		this.indicator = this.MACD.calculateFromTick(ticks[i]).indicator;
@@ -31,6 +31,6 @@ insights.prototype.update = function(callback) {
   			//this.logger.log('MACD '+i+': '+this.MACD.calculateFromTick(ticks[i]).indicator.macd);
       }
   	}
-  }.bind(this));
+  }.bind(this));*/
 }
 module.exports = insights;

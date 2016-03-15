@@ -57,7 +57,7 @@ storage.prototype.pushBulk = function(candleStickSizeMinutes, csArray, callback)
   }
 */
 
-  console.log('\nStorage | pushBulk \ncsArray.length: '+csArray.length+' | csArray[0].period: '+csArray[0].period+' | csArray['+(csArray.length-1)+'].period: '+csArray[csArray.length-1].period);
+  console.log('\nStorage | pushBulk \ncandleStickSizeMinutes: '+candleStickSizeMinutes+' | csArray.length: '+csArray.length+' | csArray[0].period: '+csArray[0].period+' | csArray['+(csArray.length-1)+'].period: '+csArray[csArray.length-1].period+'\n\n');
 
   var csDatastore = mongo(this.mongoConnectionString);
   var csCollection = csDatastore.collection(this.exchangeInfoBase);
@@ -82,6 +82,61 @@ storage.prototype.pushBulk = function(candleStickSizeMinutes, csArray, callback)
     } else {
 
       callback(null, csArray, candleStickSizeMinutes);
+
+    }
+
+  });
+
+};
+
+storage.prototype.pushBulkMultiCandles = function(multiCandles, callback) {
+
+  console.log('\nStorage | pushBulkMultiCandles');
+  //console.log('\nStorage | pushBulk \ncandleStickSizeMinutes: '+candleStickSizeMinutes+' | csArray.length: '+csArray.length+' | csArray[0].period: '+csArray[0].period+' | csArray['+(csArray.length-1)+'].period: '+csArray[csArray.length-1].period+'\n\n');
+
+  var csDatastore = mongo(this.mongoConnectionString);
+  var csCollection = csDatastore.collection(this.exchangeInfoBase);
+  var candle = '';
+  var bulk = csCollection.initializeOrderedBulkOp();
+
+  /*
+    multiCandles = {
+      '5': [{ period: 1234, '5min': {'open': 1234, 'close': 1234}}, {}, {}... ],
+      '15': [{ period: 1234, '5min': {'open': 1234, 'close': 1234}}, {}, {}...]
+      ...
+    }
+  */
+
+  //for each candle (5,15,30...) period,
+  //for each candles in that period
+
+  //TODO: see if it's possible to have one obj with a mix of all candle periods and not have to double loop?
+  _.each(multiCandles, function(candles, min) {
+    var minuteString = min+'min';
+    var candle = {};
+
+    console.log('min: '+min);
+    
+    _.each(candles, function(candle, i){
+      var set = {};
+      set[minuteString] = candle[ minuteString ];
+
+      console.log('\nin 2nd each... set[minuteString]: '+JSON.stringify(set[minuteString]));
+
+      bulk.find({period: candle.period}).upsert().update({$set : set});
+    });    
+  });
+
+  bulk.execute(function(err, res) {
+    csDatastore.close();
+
+    if(err) {
+
+      callback(err, multiCandles);
+
+    } else {
+
+      callback(null, multiCandles);
 
     }
 
@@ -341,7 +396,7 @@ storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeMinutes, callb
 storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callback) {
 
   var candleMin = candleStickSizeMinutes+'min';
-  var candleVol = candleMin+'volume';
+  var candleVol = candleMin+'.volume';
   var csDatastore = mongo(this.mongoConnectionString);
   var csCollection = csDatastore.collection(this.exchangeInfoBase);
 
@@ -349,7 +404,10 @@ storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callba
   query[candleMin] = { $exists: true };
   query[candleVol] = { $gte:0 };
 
-  csCollection.find(query).sort({period:-1}).limit(1, function(err, candleSticks) {
+  //console.log(JSON.stringify(query));
+
+  csCollection.find(query).sort({period:-1}).limit(1, function(err, candleStick) {
+    //console.log(JSON.stringify(candleStick));
 
     csDatastore.close();
 
@@ -359,8 +417,8 @@ storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callba
 
     } else {
 
-      if(candleSticks.length > 0) {
-        callback(null, candleSticks[0].close);
+      if(candleStick) {
+        callback(null, candleStick);
       } else {
         callback(null, 0);
       }
@@ -562,8 +620,6 @@ storage.prototype.aggregateCandleSticks2 = function(candleStickSize, candleStick
     return [];
   }
 
-  //var candleStickSizeSeconds = 60 * candleStickSize;
-
   // find this required candle's best divisor based on previous candle sizes, pCandleSize, from the config settings
   // - e.i if candleStickSize == 5, pCandleSize == 1, candleStickSize == 15, pCandleSize = 5, candleStickSize == 60, pCandleSize = 30
   // see if we can use this pCandleSize to save time calculating so we're not stuck using 1min candles for 12hr periods
@@ -600,13 +656,14 @@ storage.prototype.aggregateCandleSticks2 = function(candleStickSize, candleStick
   
   currentCandleStick = {'period': candleTimePeriod};
 
-  console.log('candleTimePeriod: '+candleTimePeriod+' | beginTimeStamp: '+beginTimeStamp);
+  console.log('beginTimeStamp: '+beginTimeStamp+' | candleTimePeriod: '+candleTimePeriod);
+  console.log('numToLoop: '+numToLoop+' | pCandleSize: '+pCandleSize+' | pCandleSizeString: '+pCandleSizeString);
 
   _.each(candleSticks, function(candleStick) {
 
-    //console.log('i: '+i+' | candleStick: '+JSON.stringify(candleStick));
+    console.log('i: '+i+' | candleStick: '+JSON.stringify(candleStick));
 
-    if( candleStick.period > beginTimeStamp ){
+    if( candleStick.period >= beginTimeStamp ){
       relevantSticks.push(candleStick);
 
       if( i % numToLoop == 0){        

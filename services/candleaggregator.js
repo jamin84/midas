@@ -16,7 +16,7 @@ var aggregator = function(indicatorSettings, storage, logger) {
     this.previousCompleteCandleStickPeriod[ this.candleStickSizeMinutesArray[i] ]['period'] = 0;
   }
 */
-  _.bindAll(this, 'update', 'setCandleStickSize', 'processInitalCandleUpdate');
+  _.bindAll(this, 'update', 'setCandleStickSize', 'createInitialIndicatorCandles', 'processInitialMultiCandleUpdate');
 
 };
 
@@ -121,21 +121,21 @@ aggregator.prototype.createInitialIndicatorCandles = function(initialCandles) {
   console.log('\n\n\Candleaggregator | createInitialIndicatorCandles\nfrom '+initialCandles.length+' candles...');
   console.log('InitialCandles[0].period: '+initialCandles[0].period+' | initialCandles['+((initialCandles.length)-1)+'].period: '+initialCandles[initialCandles.length-1].period);
 
+  var aggregatedCandleSticks = {};
   for(var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
 
     console.log('for '+this.candleStickSizeMinutesArray[i]+'min');
 
-    var aggregatedCandleSticks = this.storage.aggregateCandleSticks2(this.candleStickSizeMinutesArray[i], initialCandles);
+    aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ] = this.storage.aggregateCandleSticks2(this.candleStickSizeMinutesArray[i], initialCandles);
 
-    //console.log('\n\n\n\n\n aggregatedCandleSticks \n'+JSON.stringify(aggregatedCandleSticks));
-    if( aggregatedCandleSticks.length > 1){
-      this.storage.pushBulk(this.candleStickSizeMinutesArray[i], aggregatedCandleSticks, this.processInitalCandleUpdate);
-    }
+    console.log('\nStorage | createInitialIndicatorCandles\naggregatedCandleSticks[5]: '+JSON.stringify(aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ]));
   }
+
+  this.storage.pushBulkMultiCandles(aggregatedCandleSticks, this.processInitialMultiCandleUpdate);
 
 };
 
-aggregator.prototype.processInitalCandleUpdate = function(err, initialCandles, candleStickSizeMinutes) {
+aggregator.prototype.processInitialMultiCandleUpdate = function(err, multiCandlesArray) {
 
   if(err) {
 
@@ -151,19 +151,21 @@ aggregator.prototype.processInitalCandleUpdate = function(err, initialCandles, c
     process.exit();
 
   } else {
-    console.log('candleStickSizeMinutes: '+candleStickSizeMinutes);
-    this.storage.getLastNCandles(candleStickSizeMinutes, 1, function(err, candleSticks) {
+    //console.log('candleStickSizeMinutes: '+candleStickSizeMinutes);
+    this.storage.getLastNCandles(this.candleStickSizeMinutesArray[ this.candleStickSizeMinutesArray.length-1 ], 1, function(err, candleSticks) {
 
       var latestCandleStick = candleSticks[0];
       console.log('this.initialCandleDBWriteDone: '+this.initialCandleDBWriteDone);
+
       if(!this.initialCandleDBWriteDone) {
 
-        this.emit('initialCandleDBWrite', initialCandles);
         this.initialCandleDBWriteDone = true;
+        console.log('this.initialCandleDBWriteDone: '+this.initialCandleDBWriteDone);
+        this.emit('initialCandleDBWrite');
 
       } else {
 
-        console.log('\n\n\n\n\nlatestCandleStick: '+latestCandleStick);
+        console.log('\n\candleAggregator | processInitialMultiCandleUpdate\nlatestCandleStick: '+latestCandleStick);
 
         this.emit('update', latestCandleStick);
 

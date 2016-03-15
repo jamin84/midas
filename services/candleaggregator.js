@@ -121,14 +121,18 @@ aggregator.prototype.createInitialIndicatorCandles = function(initialCandles) {
   console.log('\n\n\Candleaggregator | createInitialIndicatorCandles\nfrom '+initialCandles.length+' candles...');
   console.log('InitialCandles[0].period: '+initialCandles[0].period+' | initialCandles['+((initialCandles.length)-1)+'].period: '+initialCandles[initialCandles.length-1].period);
 
-  var aggregatedCandleSticks = {};
+  var aggregatedCandleSticks = {},
+      baseCandles = initialCandles;
+
   for(var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
 
     console.log('for '+this.candleStickSizeMinutesArray[i]+'min');
 
-    aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ] = this.storage.aggregateCandleSticks2(this.candleStickSizeMinutesArray[i], initialCandles);
-
-    console.log('\nStorage | createInitialIndicatorCandles\naggregatedCandleSticks[5]: '+JSON.stringify(aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ]));
+    baseCandles = this.storage.aggregateCandleSticks2(this.candleStickSizeMinutesArray[i], baseCandles);
+    aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ] = baseCandles;
+    console.log('\nCandleaggregator | createInitialIndicatorCandles\naggregatedCandleSticks['+this.candleStickSizeMinutesArray[i]+']: '+JSON.stringify(aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ]));
+    console.log('\nnew baseCandles length : '+baseCandles.length);
+    console.log('\nnew baseCandles : '+JSON.stringify(baseCandles));
   }
 
   this.storage.pushBulkMultiCandles(aggregatedCandleSticks, this.processInitialMultiCandleUpdate);

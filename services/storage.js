@@ -115,13 +115,13 @@ storage.prototype.pushBulkMultiCandles = function(multiCandles, callback) {
     var minuteString = min+'min';
     var candle = {};
 
-    console.log('min: '+min);
+    console.log('\nmin: '+min);
     
     _.each(candles, function(candle, i){
       var set = {};
       set[minuteString] = candle[ minuteString ];
 
-      console.log('\nin 2nd each... set[minuteString]: '+JSON.stringify(set[minuteString]));
+      console.log('\nin 2nd each... set[minuteString]: '+JSON.stringify(candle));
 
       bulk.find({period: candle.period}).upsert().update({$set : set});
     });    
@@ -613,12 +613,7 @@ storage.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks
 };
 
 storage.prototype.aggregateCandleSticks2 = function(candleStickSize, candleSticks) {
-
-  //if there are not enough candles for the size, return
-  if ( candleSticks.length < candleStickSize){
-    console.log('\nNot enough candlesticks to aggregate for '+candleStickSize+'min candles');
-    return [];
-  }
+    console.log('\ncandleSticks.length: '+candleSticks.length);
 
   // find this required candle's best divisor based on previous candle sizes, pCandleSize, from the config settings
   // - e.i if candleStickSize == 5, pCandleSize == 1, candleStickSize == 15, pCandleSize = 5, candleStickSize == 60, pCandleSize = 30
@@ -630,9 +625,15 @@ storage.prototype.aggregateCandleSticks2 = function(candleStickSize, candleStick
       //check to see if we can use it to aggregate e.i no remainders (currently defaulting to 1 if not HCD)
       //TODO: update to actaully find highest common denominator (HCD).
       numToLoop = (candleStickSize % pCandleSize == 0 ? candleStickSize / pCandleSize : '1'),
-      pCandleSizeString = (candleStickSize % pCandleSize == 0 ? pCandleSize+'min' : '1min'),
+      pCandleSizeString = (candleStickSize % pCandleSize == 0 ? pCandleSize+'min' : '1min');    
 
-      i = 1, //iterator for looping to make new candles
+  //if there are not enough candles for the size, return
+  if ( (candleSticks.length * pCandleSize) < candleStickSize){
+    console.log('\nNot enough candlesticks to aggregate for '+candleStickSize+'min candles');
+    return [];
+  }
+
+  var i = 1, //iterator for looping to make new candles
       candleStickSizeString = candleStickSize+'min',
       currentCandleStick = {},
       candleStickInfoDefaults = {'open':0,'high':0,'low':0,'close':0,'volume':0,'vwap':0,'numTrades': 0,'macd': 0,'macdSignal': 0,'macdHistogram': 0},

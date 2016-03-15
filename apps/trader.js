@@ -55,7 +55,7 @@ var trader = function() {
 
   processor.on('update', function(cs){
     this.logger.log('Processor update...');
-    aggregator.update();
+    //aggregator.update();
   });
 
   aggregator.on('update', function(csMinutes, cs){

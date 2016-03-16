@@ -39,22 +39,22 @@ var trader = function() {
 
     this.logger.log('Processing trades!');
     processor.updateTickDB(ticks);
-    processor.updateCandleDB('1', ticks); //1 min candles
+    processor.updateCandleDB(ticks); //create 1 min candles
     //insights.update();
 
   });
 
-  processor.on('initialDBWrite', function(initialCandles){
+  processor.on('initialDBWrite', function(candles){
     this.logger.log('initialDBWrite done!');
     //console.log('\n\n\n\n'+JSON.stringify(initialCandles));
-    aggregator.createInitialIndicatorCandles(initialCandles); //create the non-1min indicator candles
     //reporter.start();
     //advisor.start();
 
   });
 
-  processor.on('update', function(cs){
+  processor.on('update', function(minCandles){
     this.logger.log('Processor update...');
+    aggregator.createIndicatorCandles(minCandles); //create the non-1min indicator candles
     //aggregator.update();
   });
 

@@ -190,7 +190,7 @@ processor.prototype.createCandleSticks = function(candleStickSizeMinutes, ticks,
 
 };
 
-processor.prototype.processUpdate = function(err, initialCandles, candleStickSizeMinutes) {
+processor.prototype.processUpdate = function(err, minCandles, candleStickSizeMinutes) {
   //console.log('\n\n\n\nPROCESSOR: '+JSON.stringify(initialCandles));
 
   if(err) {
@@ -214,14 +214,13 @@ processor.prototype.processUpdate = function(err, initialCandles, candleStickSiz
       //console.log('\n\n\n\n\nthis.initialDBWriteDone: '+this.initialDBWriteDone)
       if(!this.initialDBWriteDone) {
 
-        this.emit('initialDBWrite', initialCandles);
+        this.emit('initialDBWrite', minCandles);
         this.initialDBWriteDone = true;
 
-      } else {
-
-        this.emit('update', latestCandleStick);
-
-      }
+      } 
+      
+      console.log('minCandles.length: '+minCandles.length)
+      this.emit('update', minCandles);
 
     }.bind(this));
 
@@ -321,19 +320,27 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
 
         console.log('\ncurrentCandleStick: '+JSON.stringify(currentCandleStick)+'\n');
 
-        ticks.forEach(function(tick) {
+        ticks.forEach(function(tick, i) {
           console.log('candleTimePeriod: '+candleTimePeriod);
-          //TODO account for bigger gaps in trade times
-          if( tick.date < candleTimePeriod){
-            //this means we're in the process of updating a candle, retriever new ticks and updating until a new period
+          //console.log('Tick: '+JSON.stringify(tick));
+
+          //console.log('setting candle info...');
+          candleStickInfo.volume += tick.amount;
+          candleStickInfo.numTrades++;
+          candleStickInfo.high = (tick.price > candleStickInfo.high ? tick.price : candleStickInfo.high);
+          candleStickInfo.low = (tick.price < candleStickInfo.low ? tick.price : candleStickInfo.low);
+          candleStickInfo.close = tick.price;
+
+          //for VWAP calculations
+          cumuV += tick.amount;
+
+          currentCandleStick[ candleTimePeriodString ] = candleStickInfo;
+
+          if( tick.date < candleTimePeriod && i < ticks.length){
+            //this means we're in the process of updating a candle, retrieving new ticks and updating until a new period
             //console.log('\ntick.date < candleTimePeriod');
 
-            //if lastStoragePeriod > 0, WE NEED TO ADD THIS TICK TO THE EXISTING CANDLE INFO
-
             //currently we aggregate after the conditional, adding the complete candle to the toBePushed array. After all the ticks are looped we push the array.
-
-            //Should I add the candleStick here but instead of 'pushBulk' use 'push' to update the existing data as new ticks come in?
-            //Maybe extract the calculations from the below else and make this conditional choose between 'push' and pushBulk' 
 
           } else {
             //console.log('\nNEW period...');
@@ -389,20 +396,6 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
             } 
 
           }
-          //console.log('setting candle info...');
-          candleStickInfo.volume += tick.amount;
-          candleStickInfo.numTrades++;
-          candleStickInfo.high = (tick.price > candleStickInfo.high ? tick.price : candleStickInfo.high);
-          candleStickInfo.low = (tick.price < candleStickInfo.low ? tick.price : candleStickInfo.low);
-          candleStickInfo.close = tick.price;
-
-          //for VWAP calculations
-          cumuV += tick.amount;
-
-          currentCandleStick[ candleTimePeriodString ] = candleStickInfo;
-
-          //console.log('Tick: '+JSON.stringify(tick));
-
 
         }.bind(this));
         
@@ -418,22 +411,32 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
   }
 }
 
-processor.prototype.updateCandleDB = function(candleStickSizeMinutes, ticks) {
+processor.prototype.updateCandleDB = function(ticks) {
+  console.log('\ndataprocessor | updateCandleDB');
+  /*
+  var csFull = this.candleStickSizeMinutesArray;
+  csFull.unshift(1);
+  console.log('\n'+csFull.length);
 
-  this.storage.getLastNonEmptyPeriod(candleStickSizeMinutes, function(err, lastStoragePeriod) {
-    //this.logger.log('\n ticks[0].period: '+ticks[0].date+' | period: '+period );
-    var newTicks = _.filter(ticks,function(tick){
+  _.each(csFull, function(candleStickSizeMinute){
 
-      return tick.date >= lastStoragePeriod;
+    console.log('\ncandleStickSizeMinute : '+candleStickSizeMinute);
+*/
+    this.storage.getLastNonEmptyPeriod('1', function(err, lastStoragePeriod) {
+      console.log('\n ticks[0].period: '+ticks[0].date+' | lastStoragePeriod: '+lastStoragePeriod );
+      var newTicks = _.filter(ticks,function(tick){
 
-    });
-    //this.logger.log('\n newTicks[0].period: '+newTicks[0].date);
+        return tick.date >= lastStoragePeriod;
 
-    //so we always call this and keep updating the candles as new ticks come in...
-    this.createCandleSticks2(candleStickSizeMinutes, newTicks, this.processUpdate);
+      });
+      //this.logger.log('\n newTicks[0].period: '+newTicks[0].date);
 
-  }.bind(this));
+      //so we always call this and keep updating the candles as new ticks come in...
+      this.createCandleSticks2('1', newTicks, this.processUpdate);
 
+    }.bind(this));
+
+  //}.bind(this));
 };
 
 module.exports = processor;

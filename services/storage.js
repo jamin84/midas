@@ -305,6 +305,9 @@ storage.prototype.getAllCandles = function(candleStickSizeMinutes, callback) {
 
 storage.prototype.getAllCandlesSince = function(candleStickSizeMinutes, period, callback) {
 
+  console.log('\nstorage | getAllCandlesSince');
+  console.log('candleStickSizeMinutes: '+candleStickSizeMinutes+' since, '+period);
+
   var candleMin = candleStickSizeMinutes+'min';
   var csDatastore = mongo(this.mongoConnectionString);
   var csCollection = csDatastore.collection(this.exchangeInfoBase);
@@ -472,7 +475,10 @@ storage.prototype.getLastNAggregatedCandleSticks = function(N, candleStickSizeMi
 
   var startRange = closestCandleStick - (candleStickSizeSeconds * N);
 
-  this.getAllCandlesSince('1', startRange, function(err, candleSticks) {
+  var index = this.candleStickSizeMinutesArray.indexOf(candleStickSize),
+      pCandleSize = (index <= 0 ? 1 : this.candleStickSizeMinutesArray[ index-1 ]);
+
+  this.getAllCandlesSince(pCandleSize, startRange, function(err, candleSticks) {
     this.logger.log('***** CALLBACK: getAllCandlesSince, candleSticks length: '+candleSticks.length)
 
     if(candleSticks.length > 0) {
@@ -622,9 +628,10 @@ storage.prototype.aggregateCandleSticks2 = function(candleStickSize, candleStick
   var index = this.candleStickSizeMinutesArray.indexOf(candleStickSize),
       pCandleSize = (index == 0 ? 1 : this.candleStickSizeMinutesArray[ index-1 ]),
 
-      //check to see if we can use it to aggregate e.i no remainders (currently defaulting to 1 if not HCD)
-      //TODO: update to actaully find highest common denominator (HCD).
+      //Finds the # of times to loop using highest common denominator (HCD). e.g if candleStickSize = 15, pCandleStickSize = 5, numToLoop == 3 (we're using 3 5min candles to make one 15min candle)
       numToLoop = (candleStickSize % pCandleSize == 0 ? candleStickSize / pCandleSize : '1'),
+      //check to see if we can use it to aggregate e.i no remainders (currently defaulting to itself if no HCD)
+      //TODO: update to actaully find HCD.
       pCandleSizeString = (candleStickSize % pCandleSize == 0 ? pCandleSize+'min' : '1min');    
 
   //if there are not enough candles for the size, return

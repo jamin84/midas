@@ -214,12 +214,11 @@ processor.prototype.processUpdate = function(err, minCandles, candleStickSizeMin
       //console.log('\n\n\n\n\nthis.initialDBWriteDone: '+this.initialDBWriteDone)
       if(!this.initialDBWriteDone) {
 
-        this.emit('initialDBWrite', minCandles);
+        this.emit('initialDBWrite', latestCandleStick);
         this.initialDBWriteDone = true;
 
       } 
       
-      console.log('minCandles.length: '+minCandles.length)
       this.emit('update', minCandles);
 
     }.bind(this));
@@ -313,15 +312,15 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
         beginTimeStamp = candleTimePeriod - candleStickSizeSeconds;
         endTimeStamp = candleTimePeriod;
 
-        console.log('\n\nDataprocessor | createCandleSticks2\nlastStoragePeriod: '+lastStoragePeriod+' | candleTimePeriod: '+candleTimePeriod+' | beginTimeStamp: '+beginTimeStamp+' | endTimeStamp: '+endTimeStamp+' | previousCandle.period: '+previousCandle.period);
-        console.log('ticks[0].date: '+ticks[0].date+' | ticks.length: '+ticks.length);
+        //console.log('\n\nDataprocessor | createCandleSticks2\nlastStoragePeriod: '+lastStoragePeriod+' | candleTimePeriod: '+candleTimePeriod+' | beginTimeStamp: '+beginTimeStamp+' | endTimeStamp: '+endTimeStamp+' | previousCandle.period: '+previousCandle.period);
+        //console.log('ticks[0].date: '+ticks[0].date+' | ticks.length: '+ticks.length);
 
         currentCandleStick = {'period':candleTimePeriod}; 
 
-        console.log('\ncurrentCandleStick: '+JSON.stringify(currentCandleStick)+'\n');
+        //console.log('\ncurrentCandleStick: '+JSON.stringify(currentCandleStick)+'\n');
 
         ticks.forEach(function(tick, i) {
-          console.log('candleTimePeriod: '+candleTimePeriod);
+          //console.log('candleTimePeriod: '+candleTimePeriod);
           //console.log('Tick: '+JSON.stringify(tick));
 
           //console.log('setting candle info...');
@@ -345,7 +344,7 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
           } else {
             //console.log('\nNEW period...');
          
-            console.log('\nNEW currentCandleStick: '+JSON.stringify(currentCandleStick)+'\n');
+            //console.log('\nNEW currentCandleStick: '+JSON.stringify(currentCandleStick)+'\n');
 
             //tick aggregation for this candle complete (excluding current tick)
 
@@ -362,7 +361,7 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
             //console.log('MACD: '+JSON.stringify(indicator));
 
             toBePushed.push(currentCandleStick);
-            console.log('\nPUSHED: '+JSON.stringify(currentCandleStick)+'\n');
+            //console.log('\nPUSHED: '+JSON.stringify(currentCandleStick)+'\n');
 
             candleTimePeriod += candleStickSizeSeconds;
             previousCandle = extend({}, currentCandleStick);
@@ -374,19 +373,19 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
             candleStickInfo = extend(candleStickInfo, {'open':tick.price, 'low':tick.price});
 
             if( tick.date > candleTimePeriod ){ //if this next tick is outside consecutive period, push previous and increase
-              console.log('TICK OUTSIDE RANGE...');
-              console.log('tick.date: '+tick.date+' > candleTimePeriod: '+candleTimePeriod);
+              //console.log('TICK OUTSIDE RANGE...');
+              //console.log('tick.date: '+tick.date+' > candleTimePeriod: '+candleTimePeriod);
               //console.log('past the next candleTimePeriod, adding interim candle...');
               //if there is a gap between candle periods, set the last candle to the previous and then update the period to match the tick
             
               previousCandle.period = candleTimePeriod; //update previous candle object
               toBePushed.push(previousCandle);
-              console.log('PUSHED previous candle: '+JSON.stringify(previousCandle));
-              console.log('\n***********\ntoBePushed: '+JSON.stringify(toBePushed)+'\n***********\n');
+              //console.log('PUSHED previous candle: '+JSON.stringify(previousCandle));
+              //console.log('\n***********\ntoBePushed: '+JSON.stringify(toBePushed)+'\n***********\n');
 
               candleTimePeriod += candleStickSizeSeconds;
               currentCandleStick = {'period':candleTimePeriod};
-              console.log('updating to period '+candleTimePeriod+'...');
+              //console.log('updating to period '+candleTimePeriod+'...');
               //TODO: loop and insert N number of appropriate candles for the time lap
               //TODO: set up a check that ensures the ticks arent actually in DB, and if they are/can be downloaded, to update the candles
 
@@ -399,7 +398,7 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
 
         }.bind(this));
         
-        console.log('toBePushed.length: '+toBePushed.length);
+        //console.log('toBePushed.length: '+toBePushed.length);
         //console.log('\ntoBePushed: '+JSON.stringify(toBePushed));
 
         if (toBePushed.length > 0){

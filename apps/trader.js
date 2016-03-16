@@ -52,27 +52,14 @@ var trader = function() {
 
   });
 
-  processor.on('update', function(minCandles){
+  processor.on('update', function(){
     this.logger.log('Processor update...');
-    aggregator.createIndicatorCandles(minCandles); //create the non-1min indicator candles
+    aggregator.updateIndicatorCandles(); //create the non-1min indicator candles
     //aggregator.update();
   });
 
   aggregator.on('update', function(csMinutes, cs){
 
-/*
-    var advice = advisor.update(cs, false);
-
-    if(advice === 'buy') {
-
-      //agent.order(advice);
-
-    } else if(advice === 'sell') {
-
-      //agent.order(advice);
-
-    }
-*/
   });
 
   advisor.on('advice', function(result) {

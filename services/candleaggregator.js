@@ -1,5 +1,6 @@
 var _ = require('underscore');
 var tools = require('../util/tools.js');
+var extend = require('util')._extend;
 var indicatorMACD = require('../indicators/MACD');
 
 var aggregator = function(indicatorSettings, storage, logger) {
@@ -16,7 +17,7 @@ var aggregator = function(indicatorSettings, storage, logger) {
     this.previousCompleteCandleStickPeriod[ this.candleStickSizeMinutesArray[i] ]['period'] = 0;
   }
 */
-  _.bindAll(this, 'update', 'setCandleStickSize', 'createIndicatorCandles', 'processMultiCandleUpdate');
+  _.bindAll(this, 'update', 'setCandleStickSize', 'updateIndicatorCandles', 'processBulkCandleUpdate', 'processMultiCandleUpdate');
 
 };
 
@@ -117,25 +118,180 @@ aggregator.prototype.setCandleStickSize = function(candleStickSizeMinutes) {
 
 };
 
-aggregator.prototype.createIndicatorCandles = function(minCandles) {
-  console.log('\n\n\Candleaggregator | createIndicatorCandles\nfrom '+minCandles.length+' candles...');
-  console.log('1minCandles[0].period: '+minCandles[0].period+' | minCandles['+((minCandles.length)-1)+'].period: '+minCandles[minCandles.length-1].period);
-
+aggregator.prototype.updateIndicatorCandles = function() {
+  console.log('\n\n\Candleaggregator | updateIndicatorCandles');
   var aggregatedCandleSticks = {},
-      baseCandles = minCandles;
+      candleStickSize = 1;
 
-  for(var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
+  //for(var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
+    //trying to avoid the loop, so start with the first one
+    candleStickSize = this.candleStickSizeMinutesArray[0];
 
-    console.log('for '+this.candleStickSizeMinutesArray[i]+'min');
+    //1b. find Highest Common Denominator (HCD) for indicator
+    var index = this.candleStickSizeMinutesArray.indexOf(candleStickSize),
+        pCandleStickSize = (index == 0 ? 1 : this.candleStickSizeMinutesArray[ index-1 ]),
+        HCD = (candleStickSize % pCandleStickSize == 0 ? candleStickSize / pCandleStickSize : '1');
 
-    baseCandles = this.storage.aggregateCandleSticks2(this.candleStickSizeMinutesArray[i], baseCandles);
-    aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ] = baseCandles;
-    console.log('\nCandleaggregator | createIndicatorCandles\naggregatedCandleSticks['+this.candleStickSizeMinutesArray[i]+']: '+JSON.stringify(aggregatedCandleSticks[ this.candleStickSizeMinutesArray[i] ]));
-    console.log('\nnew baseCandles length : '+baseCandles.length);
-    console.log('\nnew baseCandles : '+JSON.stringify(baseCandles));
+    //1a. get Latest Indicator Candle period (LIP)
+    this.storage.getLastNonEmptyPeriod(candleStickSize, function(err, lastStoragePeriod) {
+      console.log('\nindex: '+index+' | candleStickSize: '+candleStickSize+' | lastStoragePeriod: '+JSON.stringify(lastStoragePeriod));
+    
+      //1c. get all HCD candles since LIP
+      this.storage.getAllCandlesSince(pCandleStickSize, lastStoragePeriod, function(err, candleSticks){
+        console.log('\n getAllCandlesSince.length: '+candleSticks.length);
+
+        //2. aggregate HCD candles for indicator
+        if( candleSticks.length > HCD){
+          aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSize, candleSticks);
+          console.log('\nCandleaggregator | updateIndicatorCandles\naggregatedCandleSticks['+candleStickSize+']: '+JSON.stringify(aggregatedCandleSticks[ candleStickSize ]));
+          this.storage.pushBulk(candleStickSize, aggregatedCandleSticks, this.processBulkCandleUpdate);
+        }
+  
+      }.bind(this));
+
+    }.bind(this));
+
+  //}
+  
+  //this.storage.pushBulkMultiCandles(aggregatedCandleSticks, this.processMultiCandleUpdate);
+
+};
+
+aggregator.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks) {
+    console.log('\ncandleSticks.length: '+candleSticks.length);
+
+  // find this required candle's best divisor based on previous candle sizes, pCandleSize, from the config settings
+  // - e.i if candleStickSize == 5, pCandleSize == 1, candleStickSize == 15, pCandleSize = 5, candleStickSize == 60, pCandleSize = 30
+  // see if we can use this pCandleSize to save time calculating so we're not stuck using 1min candles for 12hr periods
+
+  var index = this.candleStickSizeMinutesArray.indexOf(candleStickSize),
+      pCandleSize = (index == 0 ? 1 : this.candleStickSizeMinutesArray[ index-1 ]),
+
+      //Finds the # of times to loop using highest common denominator (HCD). e.g if candleStickSize = 15, pCandleStickSize = 5, numToLoop == 3 (we're using 3 5min candles to make one 15min candle)
+      HCD = (candleStickSize % pCandleSize == 0 ? candleStickSize / pCandleSize : '1'),
+      //check to see if we can use it to aggregate e.i no remainders (currently defaulting to itself if no HCD)
+      //TODO: update to actaully find HCD.
+      pCandleSizeString = (candleStickSize % pCandleSize == 0 ? pCandleSize+'min' : '1min');    
+
+  //if there are not enough candles for the size, return
+  if ( (candleSticks.length * pCandleSize) < candleStickSize){
+    console.log('\nNot enough candlesticks to aggregate for '+candleStickSize+'min candles');
+    return [];
   }
 
-  this.storage.pushBulkMultiCandles(aggregatedCandleSticks, this.processMultiCandleUpdate);
+  var i = 1, //iterator for looping to make new candles
+      candleStickSizeString = candleStickSize+'min',
+      currentCandleStick = {},
+      candleStickInfoDefaults = {'open':0,'high':0,'low':0,'close':0,'volume':0,'vwap':0,'numTrades': 0,'macd': 0,'macdSignal': 0,'macdHistogram': 0},
+      candleStickInfo = extend({}, candleStickInfoDefaults);
+      candleStickInfo = extend(candleStickInfo, {'open':candleSticks[0].price, 'low':candleSticks[0].price}),
+      relevantSticks = [],
+      aggregatedCandleSticks = [];
+
+  var candleStickSizeSeconds = candleStickSize*60,
+      candleTimePeriod = (Math.floor((candleSticks[0].period+candleStickSizeSeconds)/candleStickSizeSeconds)*candleStickSizeSeconds);
+      beginTimeStamp = candleTimePeriod - candleStickSizeSeconds;
+      endTimeStamp = candleTimePeriod;
+
+  //do we have enough candles to populate?
+  if( beginTimeStamp < candleSticks[0].period ){
+    //not enough, so bump up the candleTimePeriod to the next period
+    //console.log('adjusting candleTimePeriod... from '+candleTimePeriod+' to '+(candleTimePeriod+candleStickSizeSeconds));
+    candleTimePeriod+=candleStickSizeSeconds;
+    beginTimeStamp = candleTimePeriod - candleStickSizeSeconds;
+  }
+  
+  currentCandleStick = {'period': candleTimePeriod};
+
+  console.log('beginTimeStamp: '+beginTimeStamp+' | candleTimePeriod: '+candleTimePeriod);
+  console.log('HCD: '+HCD+' | pCandleSize: '+pCandleSize+' | pCandleSizeString: '+pCandleSizeString);
+
+  _.each(candleSticks, function(candleStick) {
+
+    console.log('i: '+i+' | candleStick: '+JSON.stringify(candleStick));
+
+    if( candleStick.period > beginTimeStamp ){
+      relevantSticks.push(candleStick);
+
+      if( i % HCD == 0){        
+        //console.log('i: '+i+' | relevantSticks.length: '+relevantSticks.length+' i % numToLoop('+numToLoop+'): '+i % numToLoop);
+
+        //got all the sticks for this period, aggregate
+        candleStickInfo.open = relevantSticks[0][ pCandleSizeString ].open;
+        candleStickInfo.high = _.max(relevantSticks, function(relevantStick) { return relevantStick[ pCandleSizeString ].high; })[ pCandleSizeString ].high;
+        candleStickInfo.low = _.min(relevantSticks, function(relevantStick) { return relevantStick[ pCandleSizeString ].low; })[ pCandleSizeString ].low;
+        candleStickInfo.close = relevantSticks[relevantSticks.length-1][ pCandleSizeString ].close;
+        candleStickInfo.numTrades =  _.reduce(relevantSticks, function(memo, entry) { return memo + entry[ pCandleSizeString ].numTrades; }, 0);
+        candleStickInfo.volume = tools.round(_.reduce(relevantSticks, function(memo, entry) { return memo + entry[ pCandleSizeString ].volume; }, 0), 8);
+        candleStickInfo.vwap = tools.round(_.reduce(relevantSticks, function(memo, entry) { return memo + (entry[ pCandleSizeString ].vwap * entry[ pCandleSizeString ].volume); }, 0) / candleStickInfo.volume, 8);
+
+        var indicator = this.MACD.calculateFromCandles(candleStickSize, candleStickInfo);
+
+        candleStickInfo = extend(candleStickInfo, indicator);/*
+        candleStickInfo.macd = indicator.macd;
+        candleStickInfo.macdSignal = indicator.macdSignal;
+        candleStickInfo.macdHistogram = indicator.macdHistogram;*/
+
+        currentCandleStick[ candleStickSizeString ] = candleStickInfo;
+        aggregatedCandleSticks.push(currentCandleStick);
+        //console.log('\n**** AggregatedCandleSticks: '+JSON.stringify(currentCandleStick)+'\n');
+
+        //reset relevant sticks and candleStickInfo
+        relevantSticks = [];      
+        currentCandleStick = {'period': currentCandleStick.period+candleStickSizeSeconds}; 
+        candleStickInfo = extend({}, candleStickInfoDefaults);
+
+      }
+      i++;
+    }
+
+  }.bind(this));
+
+  return aggregatedCandleSticks;
+
+};
+
+aggregator.prototype.processBulkCandleUpdate = function(err, candlesArr, candleStickMinutes) {
+  console.log('\ncandleaggregator | processBulkCandleUpdate');
+  console.log('candlesArr.length: '+candlesArr.length+' | candleStickMinutes: '+candleStickMinutes);
+
+  if(err) {
+
+    var parsedError = JSON.stringify(err);
+
+    if(err.stack) {
+      parsedError = err.stack;
+    }
+
+    this.logger.error('Couldn\'t create candlesticks due to a database error');
+    this.logger.error(parsedError);
+
+    process.exit();
+
+  } else {
+    console.log('candleStickMinutes: '+candleStickMinutes);
+    this.storage.getLastNCandles(candleStickMinutes, 1, function(err, candleSticks) {
+
+      var latestCandleStick = candleSticks[0];
+      console.log('this.initialCandleDBWriteDone: '+this.initialCandleDBWriteDone);
+
+      if(!this.initialCandleDBWriteDone) {
+
+        this.initialCandleDBWriteDone = true;
+        console.log('this.initialCandleDBWriteDone: '+this.initialCandleDBWriteDone);
+        this.emit('initialCandleDBWrite');
+
+      } else {
+
+        console.log('\n\candleAggregator | processInitialMultiCandleUpdate\nlatestCandleStick: '+latestCandleStick);
+
+        this.emit('update', latestCandleStick);
+
+      }
+
+    }.bind(this));
+
+  }
 
 };
 
@@ -159,17 +315,17 @@ aggregator.prototype.processMultiCandleUpdate = function(err, multiCandlesArray)
     this.storage.getLastNCandles(this.candleStickSizeMinutesArray[ this.candleStickSizeMinutesArray.length-1 ], 1, function(err, candleSticks) {
 
       var latestCandleStick = candleSticks[0];
-      console.log('this.initialCandleDBWriteDone: '+this.initialCandleDBWriteDone);
+      console.log('this.CandleDBWriteDone: '+this.initialCandleDBWriteDone);
 
       if(!this.initialCandleDBWriteDone) {
 
         this.initialCandleDBWriteDone = true;
-        console.log('this.initialCandleDBWriteDone: '+this.initialCandleDBWriteDone);
-        this.emit('initialCandleDBWrite');
+        console.log('this.candleDBWriteDone: '+this.initialCandleDBWriteDone);
+        this.emit('candleDBWrite');
 
       } else {
 
-        console.log('\n\candleAggregator | processInitialMultiCandleUpdate\nlatestCandleStick: '+latestCandleStick);
+        console.log('\n\candleAggregator | processMultiCandleUpdate\nlatestCandleStick: '+latestCandleStick);
 
         this.emit('update', latestCandleStick);
 

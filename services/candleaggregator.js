@@ -118,14 +118,13 @@ aggregator.prototype.setCandleStickSize = function(candleStickSizeMinutes) {
 
 };
 
-aggregator.prototype.updateIndicatorCandles = function() {
+aggregator.prototype.updateIndicatorCandles = function(index) {
   console.log('\n\n\Candleaggregator | updateIndicatorCandles');
   var aggregatedCandleSticks = {},
-      candleStickSize = 1;
+      candleStickSize = (index ? this.candleStickSizeMinutesArray[index] : this.candleStickSizeMinutesArray[0]);
 
   //for(var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
     //trying to avoid the loop, so start with the first one
-    candleStickSize = this.candleStickSizeMinutesArray[0];
 
     //1b. find Highest Common Denominator (HCD) for indicator
     var index = this.candleStickSizeMinutesArray.indexOf(candleStickSize),
@@ -144,7 +143,7 @@ aggregator.prototype.updateIndicatorCandles = function() {
         if( candleSticks.length > HCD){
           aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSize, candleSticks);
           console.log('\nCandleaggregator | updateIndicatorCandles\naggregatedCandleSticks['+candleStickSize+']: '+JSON.stringify(aggregatedCandleSticks[ candleStickSize ]));
-          this.storage.pushBulk(candleStickSize, aggregatedCandleSticks, this.processBulkCandleUpdate);
+          this.storage.pushBulk(candleStickSize, aggregatedCandleSticks, this.processBulkCandleUpdate); //set up next candle update
         }
   
       }.bind(this));
@@ -282,10 +281,14 @@ aggregator.prototype.processBulkCandleUpdate = function(err, candlesArr, candleS
         this.emit('initialCandleDBWrite');
 
       } else {
-
+        var index = this.candleStickSizeMinutesArray.indexOf(candleStickMinutes);
         console.log('\n\candleAggregator | processInitialMultiCandleUpdate\nlatestCandleStick: '+latestCandleStick);
 
-        this.emit('update', latestCandleStick);
+        if( index < this.candleStickSizeMinutesArray.length-1 ){
+          updateIndicatorCandles(index+1);
+        } else {
+          this.emit('update', latestCandleStick);          
+        }
 
       }
 

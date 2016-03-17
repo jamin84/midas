@@ -54,7 +54,7 @@ var trader = function() {
 
   processor.on('update', function(){
     this.logger.log('Processor update...');
-    aggregator.updateIndicatorCandles(); //create the non-1min indicator candles
+    aggregator.updateIndicatorCandles(0); //create the non-1min indicator candles, starting with index 0-based from array
     //aggregator.update();
   });
 

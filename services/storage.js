@@ -75,11 +75,11 @@ storage.prototype.pushCrossovers = function(candleStickSizeMinutes, csArray, cal
 
     if(err) {
 
-      callback(err);
+      callback(err, csArray);
 
     } else {
 
-      callback(null);
+      callback(null, csArray);
 
     }
 

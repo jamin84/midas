@@ -507,8 +507,8 @@ aggregator.prototype.updateCrossovers = function(candleSticks, candleStickSize) 
     function checkZeroCrossover(current, previous){
 
       if( previous < 0 && current > 0){
-        return 3; //macd crosses below 0 line
-      } else if( previous > 0 && current > 0){
+        return 3; //crosses above 0 line
+      } else if( previous > 0 && current < 0){
         return 4;
       } else {
         return false;
@@ -556,7 +556,7 @@ aggregator.prototype.updateCrossovers = function(candleSticks, candleStickSize) 
 }
 
 aggregator.prototype.processCrossovers = function(err, multiCandlesArray) {
-
+  console.dir(this.emit);
   if(err) {
 
     var parsedError = JSON.stringify(err);
@@ -571,13 +571,12 @@ aggregator.prototype.processCrossovers = function(err, multiCandlesArray) {
     process.exit();
 
   } else {
+    console.log('\ncandleAggregator | processCrossovers\nDone!');
+    that.emit('updateCrossovers');
 
-    console.log('\n\candleAggregator | processCrossovers\nDone!');
-    this.emit('updatedCrossovers');
+  };
 
-  }
-
-};
+}
 
 aggregator.prototype.processMultiCandleUpdate = function(err, multiCandlesArray) {
 

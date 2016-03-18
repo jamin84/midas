@@ -9,6 +9,7 @@ var storage = function(exchangeSettings, indicatorSettings, mongoConnectionStrin
   this.pair = exchangeSettings.currencyPair.pair;
   this.exchange = exchangeSettings.exchange;
   this.exchangeBase = exchangeSettings.exchange + exchangeSettings.currencyPair.pair;
+  this.exchangeCrossovers = this.exchangeBase + '_Crossovers';
   this.exchangeInfoBase = this.exchangeBase + '_Info';
   this.exchangeTicks = exchangeSettings.exchange+ exchangeSettings.currencyPair.pair + '_Ticks';
   this.candleStickSizeMinutesArray = indicatorSettings.candleStickSizeMinutesArray;
@@ -16,7 +17,7 @@ var storage = function(exchangeSettings, indicatorSettings, mongoConnectionStrin
   this.mongoConnectionString = mongoConnectionString;
   this.logger = logger;
 
-  _.bindAll(this, 'pushTicks', 'push', 'getLastTick', 'getLastNCandles', 'getAllCandles', 'getAllCandlesSince', 'getLastClose', 'getLastNonEmptyPeriod', 'getLastNonEmptyClose', 'getLastNCompleteAggregatedCandleSticks', 'getLastCompleteAggregatedCandleStick', 'getCompleteAggregatedCandleSticks', 'getLastNAggregatedCandleSticks', 'getAggregatedCandleSticks', 'getAggregatedCandleSticksSince', 'calculateAggregatedCandleStick', 'aggregateCandleSticks', 'removeOldDBCandles', 'dropCollection', 'getInitialBalance', 'setInitialBalance');
+  _.bindAll(this, 'pushTicks', 'push', 'pushCrossovers', 'getLastTick', 'getLastNCandles', 'getAllCandles', 'getAllCandlesSince', 'getLastClose', 'getLastNonEmptyPeriod', 'getLastNonEmptyClose', 'getLastNCompleteAggregatedCandleSticks', 'getLastCompleteAggregatedCandleStick', 'getCompleteAggregatedCandleSticks', 'getLastNAggregatedCandleSticks', 'getAggregatedCandleSticks', 'getAggregatedCandleSticksSince', 'calculateAggregatedCandleStick', 'aggregateCandleSticks', 'removeOldDBCandles', 'dropCollection', 'getInitialBalance', 'setInitialBalance');
 
 };
 
@@ -29,6 +30,43 @@ storage.prototype.pushTicks = function(csArray, callback) {
 
   _.forEach(csArray, function(cs) {
     bulk.find({date: cs.date}).upsert().updateOne(cs);
+  });
+
+  bulk.execute(function(err, res) {
+
+    csDatastore.close();
+
+    if(err) {
+
+      callback(err);
+
+    } else {
+
+      callback(null);
+
+    }
+
+  });
+
+};
+
+storage.prototype.pushCrossovers = function(candleStickSizeMinutes, csArray, callback) {
+
+  console.log('\nStorage | pushCrossovers');
+  console.log('candleStickSizeMinutes: '+candleStickSizeMinutes+' | csArray.length: '+csArray.length);
+  //console.log('csArray[0].period: '+csArray[0].period+' | csArray['+(csArray.length-1)+'].period: '+csArray[csArray.length-1][candleStickSizeMinutes].period+'\n\n');
+
+  var csDatastore = mongo(this.mongoConnectionString);
+  var csCollection = csDatastore.collection(this.exchangeCrossovers);
+
+  var bulk = csCollection.initializeOrderedBulkOp(),
+      candle =  candleStickSizeMinutes+'min',
+      set = {};
+
+  _.forEach(csArray, function(cs) {
+    set = {};
+    set[candle] = cs[candle];
+    bulk.find({period: cs.period}).upsert().updateOne({$set : set});
   });
 
   bulk.execute(function(err, res) {
@@ -397,6 +435,7 @@ storage.prototype.getLastNonEmptyPeriod = function(candleStickSizeMinutes, callb
 };
 
 storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callback) {
+  console.log('\nstorage | getLastNonEmptyClose');
 
   var candleMin = candleStickSizeMinutes+'min';
   var candleVol = candleMin+'.volume';
@@ -410,7 +449,7 @@ storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callba
   //console.log(JSON.stringify(query));
 
   csCollection.find(query).sort({period:-1}).limit(1, function(err, candleStick) {
-    //console.log(JSON.stringify(candleStick));
+    console.log('nonEmptyClose: '+JSON.stringify(candleStick));
 
     csDatastore.close();
 
@@ -420,8 +459,8 @@ storage.prototype.getLastNonEmptyClose = function(candleStickSizeMinutes, callba
 
     } else {
 
-      if(candleStick) {
-        callback(null, candleStick);
+      if(candleStick.length > 0) {
+        callback(null, candleStick[0][candleMin].close);
       } else {
         callback(null, 0);
       }

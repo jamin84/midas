@@ -63,6 +63,7 @@ indicator.prototype.calculate = function(cs) {
   var macdHistogram = tools.round(macd - macdSignal, 8);
 
   this.indicator = {'emaLong': emaLong, 'emaShort': emaShort, 'macd': macd, 'macdSignal': macdSignal, 'result': macdHistogram};
+  console.log(JSON.stringify(this.indicator));
 
   if(this.previousIndicator.result <= this.options.buyThreshold && this.indicator.result > this.options.buyThreshold) {
 

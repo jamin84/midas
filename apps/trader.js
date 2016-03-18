@@ -23,8 +23,8 @@ var logger = new loggingservice('trader', config.debug);
 var storage = new storageservice(config.exchangeSettings, config.indicatorSettings, config.mongoConnectionString, logger);
 var exchangeapi = new exchangeapiservice(config.exchangeSettings, config.apiSettings, logger);
 var retriever = new dataretriever(config.downloaderRefreshSeconds, exchangeapi, logger);
-var processor = new dataprocessor(config.indicatorSettings, storage, logger);
 var aggregator = new candleaggregator(config.indicatorSettings, storage, logger);
+var processor = new dataprocessor(config.indicatorSettings, storage, aggregator, logger);
 var advisor = new tradingadvisor(config.indicatorSettings, storage, logger);
 var agent = new tradingagent(config.tradingEnabled, config.exchangeSettings, storage, exchangeapi, logger);
 var pusher = new pushservice(config.pushOver, logger);
@@ -52,8 +52,11 @@ var trader = function() {
 
   });
 
-  processor.on('update', function(){
+  processor.on('update', function(candles){
     this.logger.log('Processor update...');
+    if(candles.length>=1){
+      aggregator.updateCrossovers(candles, '1');
+    }
     aggregator.updateIndicatorCandles(0); //create the non-1min indicator candles, starting with index 0-based from array
     //aggregator.update();
   });

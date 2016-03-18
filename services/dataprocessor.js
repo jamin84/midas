@@ -4,11 +4,12 @@ var tools = require('../util/tools.js');
 var extend = require('util')._extend;
 var indicatorMACD = require('../indicators/MACD');
 
-var processor = function(indicatorSettings, storage, logger) {
+var processor = function(indicatorSettings, storage, aggregator, logger) {
 
   this.initialDBWriteDone = false;
   this.initialTickDBWriteDone = false;
   this.candleStickSizeMinutesArray = indicatorSettings.candleStickSizeMinutesArray;
+  this.aggregator = aggregator;
   this.storage = storage;
   this.logger = logger;
   this.MACD = new indicatorMACD(indicatorSettings, logger);
@@ -265,7 +266,7 @@ processor.prototype.processTickUpdate = function(err) {
 
 };
 
-
+/*
 processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks, callback) {
   //goal: to create 1 min candle sticks on whole time blocks, e.g. 8:00:00pm or 9:15:00pm
   //TODO: account for periods of no trading.
@@ -277,14 +278,12 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
 
       //lastStorage period == 0 (no previous candles), or unix time stamp of last 1min candle
 
-      this.storage.getLastNonEmptyClose(candleStickSizeMinutes, function(err, lastNonEmptyClose) {
-
-        //lastNonEmptyClose == ?
+      //this.storage.getLastNonEmptyClose(candleStickSizeMinutes, function(err, lastNonEmptyClose) {
 
         var candleStickSizeSeconds = candleStickSizeMinutes*60,
             toBePushed = [], //array of candles to bulk push
             indicator = {}, //macd indicator
-            previousClose = lastNonEmptyClose,
+            previousClose = 0,
             beginTimeStamp = 0,
             endTimeStamp = 0, //just for convention sake, its really = candleTimePeriod
             candleTimePeriod = 0,
@@ -295,8 +294,7 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
             candleStickInfo = extend(candleStickInfo, {'open':ticks[0].price, 'low':ticks[0].price})
             cumuPV = 0,
             cumuV = 0,
-            previousCandle = lastNonEmptyClose[0] || {};
-
+            previousCandle = {};
 
         if( lastStoragePeriod > 0 && ticks[0].date > lastStoragePeriod ){
           //if we have previous candles and this tick its outside of it
@@ -333,8 +331,6 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
           //for VWAP calculations
           cumuV += tick.amount;
 
-          currentCandleStick[ candleTimePeriodString ] = candleStickInfo;
-
           if( tick.date < candleTimePeriod && i < ticks.length){
             //this means we're in the process of updating a candle, retrieving new ticks and updating until a new period
             //console.log('\ntick.date < candleTimePeriod');
@@ -353,18 +349,19 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
 
             cumuPV += pv;
 
-            currentCandleStick[ candleTimePeriodString ].vwap = tools.round(cumuPV / cumuV, 8);
+            candleStickInfo.vwap = tools.round(cumuPV / cumuV, 8);
             
             //calculate MACD (this function calculates from the candles, stores each by the min, and returns the calculations once it's reached the config threshold for periods)           
             indicator = this.MACD.calculateFromCandles(candleStickSizeMinutes, candleStickInfo);
             candleStickInfo = extend(candleStickInfo, indicator);
+
+            currentCandleStick[ candleTimePeriodString ] = candleStickInfo;
             //console.log('MACD: '+JSON.stringify(indicator));
 
             toBePushed.push(currentCandleStick);
             //console.log('\nPUSHED: '+JSON.stringify(currentCandleStick)+'\n');
 
             candleTimePeriod += candleStickSizeSeconds;
-            previousCandle = extend({}, currentCandleStick);
 
             //update time period and reset values for this next candle
             currentCandleStick = {'period':candleTimePeriod};
@@ -378,7 +375,13 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
               //console.log('past the next candleTimePeriod, adding interim candle...');
               //if there is a gap between candle periods, set the last candle to the previous and then update the period to match the tick
             
-              previousCandle.period = candleTimePeriod; //update previous candle object
+              previousCandle = {'period': candleTimePeriod}; //update previous candle object
+              candleStickInfo = {'open':previousClose,'high':previousClose,'low':previousClose,'close':previousClose,'volume':0,'vwap':previousClose,'numTrades': 0,'macd': 0,'macdSignal': 0,'macdHistogram': 0};
+              
+              indicator = this.MACD.calculateFromCandles(candleStickSizeMinutes, candleStickInfo);
+              candleStickInfo = extend(candleStickInfo, indicator);
+
+              previousCandle[ candleTimePeriodString ] = candleStickInfo;
               toBePushed.push(previousCandle);
               //console.log('PUSHED previous candle: '+JSON.stringify(previousCandle));
               //console.log('\n***********\ntoBePushed: '+JSON.stringify(toBePushed)+'\n***********\n');
@@ -396,19 +399,21 @@ processor.prototype.createCandleSticks2 = function(candleStickSizeMinutes, ticks
 
           }
 
+          previousClose = tick.price;
+
         }.bind(this));
         
         //console.log('toBePushed.length: '+toBePushed.length);
-        //console.log('\ntoBePushed: '+JSON.stringify(toBePushed));
+        console.log('\ntoBePushed: '+JSON.stringify(toBePushed));
 
         if (toBePushed.length > 0){
           this.storage.pushBulk(candleStickSizeMinutes, toBePushed, callback);
         }
 
-      }.bind(this));
+     // }.bind(this));
     }.bind(this));
   }
-}
+}*/
 
 processor.prototype.updateCandleDB = function(ticks) {
   console.log('\ndataprocessor | updateCandleDB');
@@ -431,7 +436,7 @@ processor.prototype.updateCandleDB = function(ticks) {
       //this.logger.log('\n newTicks[0].period: '+newTicks[0].date);
 
       //so we always call this and keep updating the candles as new ticks come in...
-      this.createCandleSticks2('1', newTicks, this.processUpdate);
+      this.aggregator.createCandleSticks2('1', newTicks, this.processUpdate);
 
     }.bind(this));
 

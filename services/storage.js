@@ -95,7 +95,8 @@ storage.prototype.pushBulk = function(candleStickSizeMinutes, csArray, callback)
   }
 */
 
-  console.log('\nStorage | pushBulk \ncandleStickSizeMinutes: '+candleStickSizeMinutes+' | csArray.length: '+csArray.length+' | csArray[0].period: '+csArray[0].period+' | csArray['+(csArray.length-1)+'].period: '+csArray[csArray.length-1].period+'\n\n');
+  console.log('\nStorage | pushBulk \ncandleStickSizeMinutes: '+candleStickSizeMinutes+' | csArray.length: '+csArray.length)
+  console.log('\ncsArray[0].period: '+csArray[0].period+' | csArray['+(csArray.length-1)+'].period: '+csArray[csArray.length-1].period+'\n\n');
 
   var csDatastore = mongo(this.mongoConnectionString);
   var csCollection = csDatastore.collection(this.exchangeInfoBase);

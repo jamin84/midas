@@ -18,7 +18,7 @@ var aggregator = function(indicatorSettings, storage, logger) {
     this.lastCandleStored[ this.candleStickSizeMinutesArray[i] ] = false;
   }
 
-  _.bindAll(this, 'update', 'setCandleStickSize', 'updateIndicatorCandles', 'aggregateCandleSticks', 'updateCrossovers', 'processBulkCandleUpdate', 'processMultiCandleUpdate');
+  _.bindAll(this, 'update', 'setCandleStickSize', 'updateIndicatorCandles', 'aggregateCandleSticks', 'updateCrossovers', 'processCrossovers', 'processBulkCandleUpdate', 'processMultiCandleUpdate');
 
 };
 
@@ -279,7 +279,8 @@ aggregator.prototype.updateIndicatorCandles = function(index) {
     //1b. find Highest Common Denominator (HCD) for indicator
     var index = this.candleStickSizeMinutesArray.indexOf(candleStickSize),
         pCandleStickSize = (index == 0 ? 1 : this.candleStickSizeMinutesArray[ index-1 ]),
-        HCD = (candleStickSize % pCandleStickSize == 0 ? candleStickSize / pCandleStickSize : '1');
+        HCD = (candleStickSize % pCandleStickSize == 0 ? pCandleStickSize : '1'),
+        neededCandles = candleStickSize / HCD;
 
     //1a. get Latest Indicator Candle period (LIP)
     this.storage.getLastNonEmptyPeriod(candleStickSize, function(err, lastStoragePeriod) {
@@ -287,17 +288,17 @@ aggregator.prototype.updateIndicatorCandles = function(index) {
 
       //1c. get all HCD candles since LIP
       this.storage.getAllCandlesSince(pCandleStickSize, lastStoragePeriod, function(err, candleSticks){
-        console.log('\n getAllCandlesSince.length: '+candleSticks.length);
+        console.log('\n getAllCandlesSince.length: '+candleSticks.length+' | index: '+index+' | pCandleStickSize: '+pCandleStickSize+' | candleStickSize: '+candleStickSize+' | HCD: '+HCD+' | neededCandles: '+neededCandles);
 
         //2. aggregate HCD candles for indicator
-        if( candleSticks.length > HCD){
+        if( candleSticks.length >= neededCandles ){
           aggregatedCandleSticks = this.aggregateCandleSticks(candleStickSize, candleSticks);
 
           if( lastStoragePeriod == 0 || this.lastCandleStored[ candleStickSize ] == 0){
             this.lastCandleStored[ candleStickSize ] = aggregatedCandleSticks[0];        
           }
 
-          console.log('\nlastCandleStored: '+JSON.stringify(this.lastCandleStored[ candleStickSize ]) );
+          console.log('\nupdateIndicatorCandles | aggregatedCandleSticks.length: '+aggregatedCandleSticks.length+' | lastCandleStored: '+JSON.stringify(this.lastCandleStored[ candleStickSize ]) );
 
           //TODO: 3/17/2016: store MACD info
           //compare previous to current for CROSSOVER
@@ -308,14 +309,19 @@ aggregator.prototype.updateIndicatorCandles = function(index) {
           //1. does the current histogram direction(pos vs neg) match the previous histogram? if not, record.
           //2. does the current macd direction match the previous macd? if not, record
           //3. store by period, like candles {period : 12355, 1min : {}, 5min : {} }
+  
+          if( aggregatedCandleSticks.length > 0 ){
+            this.updateCrossovers(aggregatedCandleSticks, candleStickSize);
+            this.lastCandleStored[ candleStickSize ] = aggregatedCandleSticks.slice(-1)[0];
+            this.storage.pushBulk(candleStickSize, aggregatedCandleSticks, this.processBulkCandleUpdate);
+          } else {
+            this.updateIndicatorCandles(index+1);
+          }
 
-          this.updateCrossovers(aggregatedCandleSticks, candleStickSize);
-
-          this.lastCandleStored[ candleStickSize ] = aggregatedCandleSticks.slice(-1)[0];
           console.log('\nupdateIndicatorCandles | lastCandleStored: '+JSON.stringify(this.lastCandleStored[ candleStickSize ]) );
 
           //console.log('\nCandleaggregator | updateIndicatorCandles\naggregatedCandleSticks['+candleStickSize+']: '+JSON.stringify(aggregatedCandleSticks[ candleStickSize ]));
-          this.storage.pushBulk(candleStickSize, aggregatedCandleSticks, this.processBulkCandleUpdate); //set up next candle update
+           //set up next candle update
         }
   
       }.bind(this));
@@ -329,7 +335,7 @@ aggregator.prototype.updateIndicatorCandles = function(index) {
 };
 
 aggregator.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks) {
-    console.log('\ncandleSticks.length: '+candleSticks.length);
+    console.log('\naggregateCandleSticks | candleSticks.length: '+candleSticks.length);
 
   // find this required candle's best divisor based on previous candle sizes, pCandleSize, from the config settings
   // - e.i if candleStickSize == 5, pCandleSize == 1, candleStickSize == 15, pCandleSize = 5, candleStickSize == 60, pCandleSize = 30
@@ -379,9 +385,9 @@ aggregator.prototype.aggregateCandleSticks = function(candleStickSize, candleSti
 
   _.each(candleSticks, function(candleStick) {
 
-    //console.log('i: '+i+' | candleStick: '+JSON.stringify(candleStick));
+    console.log('i: '+i+' | candleStick: '+JSON.stringify(candleStick));
 
-    if( candleStick.period > beginTimeStamp ){
+    if( candleStick.period >= beginTimeStamp && candleStick.period<= candleTimePeriod ){
       relevantSticks.push(candleStick);
 
       if( i % HCD == 0){        
@@ -450,10 +456,10 @@ aggregator.prototype.processBulkCandleUpdate = function(err, candlesArr, candleS
 
       } else {
         var index = this.candleStickSizeMinutesArray.indexOf(candleStickMinutes);
-        console.log('\n\candleAggregator | processInitialMultiCandleUpdate\nlatestCandleStick: '+latestCandleStick);
+        console.log('\n\candleAggregator | processInitialMultiCandleUpdate\nlatestCandleStick: '+JSON.stringify(latestCandleStick));
 
-        if( index < this.candleStickSizeMinutesArray.length-1 ){
-          updateIndicatorCandles(index+1);
+        if( index < this.candleStickSizeMinutesArray.length ){
+          this.updateIndicatorCandles(index+1);
         } else {
           this.emit('update', latestCandleStick);          
         }
@@ -556,7 +562,6 @@ aggregator.prototype.updateCrossovers = function(candleSticks, candleStickSize) 
 }
 
 aggregator.prototype.processCrossovers = function(err, multiCandlesArray) {
-  console.dir(this.emit);
   if(err) {
 
     var parsedError = JSON.stringify(err);
@@ -572,8 +577,7 @@ aggregator.prototype.processCrossovers = function(err, multiCandlesArray) {
 
   } else {
     console.log('\ncandleAggregator | processCrossovers\nDone!');
-    that.emit('updateCrossovers');
-
+    this.emit('processCrossovers');
   };
 
 }

@@ -14,7 +14,7 @@ var aggregator = function(indicatorSettings, storage, logger) {
   this.MACD = new indicatorMACD(indicatorSettings, logger);
 
   //initialize array
-  for(var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
+  for (var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
     this.lastCandleStored[ this.candleStickSizeMinutesArray[i] ] = false;
   }
 
@@ -335,7 +335,8 @@ aggregator.prototype.updateIndicatorCandles = function(index) {
 };
 
 aggregator.prototype.aggregateCandleSticks = function(candleStickSize, candleSticks) {
-    console.log('\naggregateCandleSticks | candleSticks.length: '+candleSticks.length);
+  console.log('\n***************************************************');
+  console.log('\naggregateCandleSticks | candleSticks.length: '+candleSticks.length);
 
   // find this required candle's best divisor based on previous candle sizes, pCandleSize, from the config settings
   // - e.i if candleStickSize == 5, pCandleSize == 1, candleStickSize == 15, pCandleSize = 5, candleStickSize == 60, pCandleSize = 30
@@ -387,7 +388,7 @@ aggregator.prototype.aggregateCandleSticks = function(candleStickSize, candleSti
 
     console.log('i: '+i+' | candleStick: '+JSON.stringify(candleStick));
 
-    if( candleStick.period >= beginTimeStamp && candleStick.period<= candleTimePeriod ){
+    if( candleStick.period > beginTimeStamp ){ //we have all the 1min candles so we can assume theyre in order without gaps
       relevantSticks.push(candleStick);
 
       if( i % HCD == 0){        
@@ -420,6 +421,7 @@ aggregator.prototype.aggregateCandleSticks = function(candleStickSize, candleSti
 
   }.bind(this));
 
+  console.log('\n***************************************************');
   return aggregatedCandleSticks;
 
 };
@@ -473,11 +475,12 @@ aggregator.prototype.processBulkCandleUpdate = function(err, candlesArr, candleS
 };
 
 aggregator.prototype.updateCrossovers = function(candleSticks, candleStickSize) {
-  console.log('\ncandleaggregator | updateCrossover\ncandles.length: '+candleSticks.length);
+  console.log('\n***************************************************');
+  console.log('\ncandleaggregator | updateCrossover\ncandleStickSize: '+candleStickSize+' | candles.length: '+candleSticks.length);
   console.log('\nlastCandleStored: '+JSON.stringify(this.lastCandleStored[candleStickSize]) );
 
 /*
-  if( !this.lastCandleStored[ candleStickSize ][ candleStickSize+'min' ].macdHistogram ){
+  if( !this.lastCandleStored[ candleStickSize ] ){
     console.log('Not enough MACD data, returning...')
     return;
   }
@@ -492,8 +495,8 @@ aggregator.prototype.updateCrossovers = function(candleSticks, candleStickSize) 
         candleStickSizeString = candleStickSize+'min',
         signal = 0;
 
-    //console.log('\ncurrentCandle['+candleStickSizeString+']: '+JSON.stringify(candle));
-    //console.log('\npreviousCandle['+candleStickSizeString+']: '+JSON.stringify(previousCandle) );
+    console.log('\ncurrentCandle['+candleStickSizeString+']: '+JSON.stringify(candle));
+    console.log('\npreviousCandle['+candleStickSizeString+']: '+JSON.stringify(previousCandle) );
     
     function checkHistogramCrossover(current, previous){
       //find direction (pos or neg of values)
@@ -531,33 +534,42 @@ aggregator.prototype.updateCrossovers = function(candleSticks, candleStickSize) 
       6 - Signal crosses BELOW zero line  (signal < 0 now)
     */
 
-    if( signal = checkHistogramCrossover(candle[ candleStickSizeString ].macdHistogram, previousCandle[ candleStickSizeString ].macdHistogram) ){
-      console.log('macd/signal (histogram) crossover recorded!');
-      crossover = {'period': candle.period};
-      crossover[ candleStickSizeString ] = {'type': signal}
-      crossoverArray.push(crossover);
+    if( previousCandle[ candleStickSizeString ].macdHistogram ){
+      if( signal = checkHistogramCrossover(candle[ candleStickSizeString ].macdHistogram, previousCandle[ candleStickSizeString ].macdHistogram) ){
+        console.log('macd/signal (histogram) crossover recorded!');
+        crossover = {'period': candle.period};
+        crossover[ candleStickSizeString ] = {'type': signal}
+        crossoverArray.push(crossover);
+      }
     }
 
-    if( signal = checkZeroCrossover(candle[ candleStickSizeString ].macd, previousCandle[ candleStickSizeString ].macd) ){
-      console.log('macd / 0 crossover recorded!');
-      crossover = {'period': candle.period};
-      crossover[ candleStickSizeString ] = {'type': signal}
-      crossoverArray.push(crossover);
+    if( previousCandle[ candleStickSizeString ].macd ){
+      if( signal = checkZeroCrossover(candle[ candleStickSizeString ].macd, previousCandle[ candleStickSizeString ].macd) ){
+        console.log('macd / 0 crossover recorded!');
+        crossover = {'period': candle.period};
+        crossover[ candleStickSizeString ] = {'type': signal}
+        crossoverArray.push(crossover);
+      }
     }
 
-    if( signal = checkZeroCrossover(candle[ candleStickSizeString ].macdSignal, previousCandle[ candleStickSizeString ].macdSignal) ){
-      console.log('macd signal/0 crossover recorded!');
-      crossover = {'period': candle.period};
-      crossover[ candleStickSizeString ] = {'type': signal+=2}
-      crossoverArray.push(crossover);
+    if( previousCandle[ candleStickSizeString ].macdSignal ){
+      if( signal = checkZeroCrossover(candle[ candleStickSizeString ].macdSignal, previousCandle[ candleStickSizeString ].macdSignal) ){
+        console.log('macd signal/0 crossover recorded!');
+        crossover = {'period': candle.period};
+        crossover[ candleStickSizeString ] = {'type': signal+=2}
+        crossoverArray.push(crossover);
+      }
     }
 
 
   }.bind(this));
 
-  this.storage.pushCrossovers(candleStickSize, crossoverArray, this.processCrossovers);
+  if( crossoverArray.length > 0){
+    this.storage.pushCrossovers(candleStickSize, crossoverArray, this.processCrossovers);
+  }
   console.log('this.lastCandleStored: '+JSON.stringify(candleSticks.slice(-1)[0]));
   this.lastCandleStored[ candleStickSize ] = candleSticks.slice(-1)[0];
+  console.log('\n***************************************************');
 
 }
 

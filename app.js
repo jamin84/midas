@@ -30,6 +30,7 @@ app.prototype.launchTrader = function() {
   this.app = require('./apps/trader.js');
   this.appListener();
   this.app.start();
+  //this.app = require('./apps/interface/interface.js');
 
 };
 
@@ -106,7 +107,7 @@ app.prototype.start = function() {
 
   //------------------------------AnnounceStart
   this.logger.log('----------------------------------------------------');
-  this.logger.log('Starting BitBot v0.9.7');
+  this.logger.log('Starting Midas v0.1.0');
   this.logger.log('Real Trading Enabled = ' + config.tradingEnabled);
   this.logger.log('Working Dir = ' + process.cwd());
   this.logger.log('----------------------------------------------------');

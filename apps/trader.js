@@ -20,11 +20,11 @@ var config = require('../config.js');
 
 //------------------------------InitializeModules
 var logger = new loggingservice('trader', config.debug);
-var storage = new storageservice(config.exchangeSettings, config.mongoConnectionString, logger);
+var storage = new storageservice(config.exchangeSettings, config.indicatorSettings, config.mongoConnectionString, logger);
 var exchangeapi = new exchangeapiservice(config.exchangeSettings, config.apiSettings, logger);
 var retriever = new dataretriever(config.downloaderRefreshSeconds, exchangeapi, logger);
-var processor = new dataprocessor(storage, logger);
-var aggregator = new candleaggregator(config.indicatorSettings.candleStickSizeMinutes, storage, logger);
+var aggregator = new candleaggregator(config.indicatorSettings, storage, logger);
+var processor = new dataprocessor(config.indicatorSettings, storage, aggregator, logger);
 var advisor = new tradingadvisor(config.indicatorSettings, storage, logger);
 var agent = new tradingagent(config.tradingEnabled, config.exchangeSettings, storage, exchangeapi, logger);
 var pusher = new pushservice(config.pushOver, logger);
@@ -39,38 +39,29 @@ var trader = function() {
 
     this.logger.log('Processing trades!');
     processor.updateTickDB(ticks);
-    processor.updateCandleDB(ticks);
-    insights.update();
+    processor.updateCandleDB(ticks); //create 1 min candles
+    //insights.update();
 
   });
 
-  processor.on('initialDBWrite', function(){
-
-    reporter.start();
-
-    advisor.start();
+  processor.on('initialDBWrite', function(candles){
+    this.logger.log('initialDBWrite done!');
+    //console.log('\n\n\n\n'+JSON.stringify(initialCandles));
+    //reporter.start();
+    //advisor.start();
 
   });
 
-  processor.on('update', function(cs){
+  processor.on('update', function(candles){
     this.logger.log('Processor update...');
-    aggregator.update();
-
+    if(candles.length>=1){
+      aggregator.updateCrossovers(candles, '1');
+    }
+    aggregator.updateIndicatorCandles(0); //create the non-1min indicator candles, starting with index 0-based from array
+    //aggregator.update();
   });
 
-  aggregator.on('update', function(cs){
-
-    var advice = advisor.update(cs, false);
-
-    if(advice === 'buy') {
-
-      agent.order(advice);
-
-    } else if(advice === 'sell') {
-
-      agent.order(advice);
-
-    }
+  aggregator.on('update', function(csMinutes, cs){
 
   });
 
@@ -99,7 +90,7 @@ var trader = function() {
   agent.on('realOrder',function(orderDetails){
 
     if(config.pushOver.enabled) {
-      pusher.send('BitBot - Order Placed!', 'Placed ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
+      pusher.send('Midas - Order Placed!', 'Placed ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
     }
 
     monitor.add(orderDetails, config.orderKeepAliveMinutes);
@@ -109,7 +100,7 @@ var trader = function() {
   agent.on('simulatedOrder',function(orderDetails){
 
     if(config.pushOver.enabled) {
-      pusher.send('BitBot - Order Simulated!', 'Simulated ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
+      pusher.send('Midas - Order Simulated!', 'Simulated ' + orderDetails.orderType + ' order: (' + orderDetails.amount + '@' + orderDetails.price + ')', 'magic', 1);
     }
 
     monitor.add(orderDetails, config.orderKeepAliveMinutes);
@@ -147,7 +138,7 @@ var trader = function() {
   reporter.on('report', function(report){
 
     if(config.pushOver.enabled) {
-      pusher.send('BitBot - Profit Report!', report, 'magic', 1);
+      pusher.send('Midas - Profit Report!', report, 'magic', 1);
     }
 
   });
@@ -173,7 +164,7 @@ trader.prototype.stop = function(cb) {
   retriever.stop();
 
   monitor.resolvePreviousOrder(function() {
-    logger.log('BitBot stopped succesfully!');
+    logger.log('Midas stopped succesfully!');
     cb();
   }.bind(this));
 

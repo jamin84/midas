@@ -50,7 +50,7 @@ agent.prototype.order = function(orderType) {
       {
         balance: function(cb) {cb(null, {assetAvailable: this.simulationBalance.assetAvailable, currencyAvailable: this.simulationBalance.currencyAvailable, fee: this.simulationBalance.fee});}.bind(this),
         orderBook: function(cb) {this.exchangeapi.getOrderBook(true, cb);}.bind(this),
-        lastClose: function(cb) {this.storage.getLastClose(cb);}.bind(this)
+        lastClose: function(cb) {this.storage.getLastClose('60', cb);}.bind(this)
       },
       process.bind(this)
     );
@@ -63,7 +63,7 @@ agent.prototype.order = function(orderType) {
       {
         balance: function(cb) {this.exchangeapi.getBalance(true, cb);}.bind(this),
         orderBook: function(cb) {this.exchangeapi.getOrderBook(true, cb);}.bind(this),
-        lastClose: function(cb) {this.storage.getLastClose(cb);}.bind(this)
+        lastClose: function(cb) {this.storage.getLastClose('60', cb);}.bind(this)
       },
       process.bind(this)
     );

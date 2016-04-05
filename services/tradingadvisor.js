@@ -4,7 +4,7 @@ var fs = require('fs');
 
 var advisor = function(indicatorSettings, storage, logger) {
 
-  this.candleStickSize = indicatorSettings.candleStickSizeMinutes;
+  this.candleStickSizeMinutesArray = indicatorSettings.candleStickSizeMinutesArray;
   this.storage = storage;
   this.logger = logger;
   this.logger.log('Initialized Advisor...');
@@ -20,7 +20,7 @@ var advisor = function(indicatorSettings, storage, logger) {
       }
     }.bind(this));
 
-    this.selectedIndicator = new this.indicators[indicatorSettings.indicator](indicatorSettings.options);
+    this.selectedIndicator = new this.indicators[indicatorSettings.indicator](indicatorSettings);
 
   } catch(err) {
 
@@ -43,39 +43,43 @@ Util.inherits(advisor, EventEmitter);
 advisor.prototype.start = function(callback) {
   this.logger.log('Started Advisor...');
 
-  this.storage.getLastNCompleteAggregatedCandleSticks(1000, this.candleStickSize, function(err, candleSticks) {
+  for(var i = 0; i<this.candleStickSizeMinutesArray.length; i++){
+    this.logger.log('Checking candle size '+this.candleStickSizeMinutesArray[i]+'...');
 
-    this.latestTradeAdvice = {
-      advice: 'hold',
-      isStart: true
-    };
+    this.storage.getLastNCompleteAggregatedCandleSticks(1000, this.candleStickSizeMinutesArray[i], function(err, candleSticks) {
 
-    for(var i = 0; i < candleSticks.length; i++) {
+      this.latestTradeAdvice = {
+        advice: 'hold',
+        isStart: true
+      };
 
-      var result = this.selectedIndicator.calculate(candleSticks[i]);
-      //this.logger.log('MACD result '+i+':'+result.indicatorValue);
+      for(var i = 0; i < candleSticks.length; i++) {
 
-      if(['buy', 'sell', 'hold'].indexOf(result.advice) >= 0) {
-        if(['buy', 'sell'].indexOf(result.advice) >= 0) {
-          _.extend(this.latestTradeAdvice, result);
+        var result = this.selectedIndicator.calculate(candleSticks[i]);
+        //this.logger.log('MACD result '+i+':'+result.indicatorValue);
+
+        if(['buy', 'sell', 'hold'].indexOf(result.advice) >= 0) {
+          if(['buy', 'sell'].indexOf(result.advice) >= 0) {
+            _.extend(this.latestTradeAdvice, result);
+          }
+        } else {
+          var _err = new Error('Invalid advice from indicator, should be either: buy, sell or hold.');
+          this.logger.error(_err.stack);
+          process.exit();
         }
-      } else {
-        var _err = new Error('Invalid advice from indicator, should be either: buy, sell or hold.');
-        this.logger.error(_err.stack);
-        process.exit();
+
       }
 
-    }
+      if(['buy', 'sell'].indexOf(this.latestTradeAdvice.advice) >= 0) {
+        this.emit('advice', this.latestTradeAdvice);
+      }
 
-    if(['buy', 'sell'].indexOf(this.latestTradeAdvice.advice) >= 0) {
-      this.emit('advice', this.latestTradeAdvice);
-    }
+      if(callback) {
+        callback();
+      }
 
-    if(callback) {
-      callback();
-    }
-
-  }.bind(this));
+    }.bind(this));
+  }
 
 };
 

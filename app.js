@@ -30,7 +30,7 @@ app.prototype.launchTrader = function() {
   this.app = require('./apps/trader.js');
   this.appListener();
   this.app.start();
-  this.app = require('./apps/interface/interface.js');
+  //this.app = require('./apps/interface/interface.js');
 
 };
 
